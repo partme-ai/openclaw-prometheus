@@ -70,7 +70,6 @@ pom.xml.versionsBackup
 
 .fastRequest
 *.http
-*.json
 .flattened-pom.xml
 qodana.yaml
 /.vscode/

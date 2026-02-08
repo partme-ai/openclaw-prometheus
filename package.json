@@ -1,0 +1,55 @@
+{
+  "name": "@partme.ai/openclaw_prometheus",
+  "version": "0.2.3",
+  "description": "Prometheus metrics exporter for OpenClaw Gateway - based on real Gateway RPC methods (health, sessions.list, channels.status, usage, presence, cron, models, nodes, skills)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "keywords": [
+    "openclaw",
+    "plugin",
+    "prometheus",
+    "metrics",
+    "monitoring"
+  ],
+  "author": "PartMe",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "openclaw.plugin.json",
+    "README.md",
+    "README_CN.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/partme-ai/openclaw_prometheus.git"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^4.0.18"
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  }
+}
