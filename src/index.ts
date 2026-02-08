@@ -1,30 +1,45 @@
 /**
  * openclaw_prometheus 插件入口
  *
- * 独立的 Prometheus 指标导出插件，参考 rabbitmq_prometheus 设计。
- * 采集 Gateway、Agent、Channel、Runtime 等多维度指标，
- * 以 Prometheus text format 和 JSON 格式暴露。
+ * 独立的 Prometheus 指标导出插件。
+ * 通过 Gateway RPC 方法（health / channels.status / sessions.list 等）
+ * 采集真实运行数据，以 Prometheus text format 和 JSON 格式暴露。
  *
  * 端点：
- * - GET /metrics             - Prometheus text format（供 Prometheus scrape）
- * - GET /metrics/per-object  - 按 Agent/Channel 分组的 JSON 指标
- * - GET /metrics/detailed    - 过滤查询：?family=xxx&agent=xxx
+ * - GET /metrics             — Prometheus text format（供 Prometheus scrape）
+ * - GET /metrics/per-object  — 按对象分组的 JSON 指标
+ * - GET /metrics/detailed    — 过滤查询：?family=xxx
  *
- * 采集器架构：
- * - GatewayCollector  - 连接数、会话数、消息率
- * - AgentCollector    - Agent 运行次数、错误数、Token 消耗
- * - ChannelCollector  - 渠道连接状态、消息量
- * - RuntimeCollector  - Node.js 堆内存、事件循环延迟、句柄数
- * - MemoryCollector   - 知识库索引状态
+ * 采集器架构（9 个，全部基于真实 RPC 方法）：
+ * - HealthCollector    — `health` RPC → 健康状态/uptime/Agent数/Session数/Channel链接
+ * - ChannelCollector   — `channels.status` RPC → 渠道详情/账号数
+ * - SessionCollector   — `sessions.list` RPC → 会话数/Token消耗聚合
+ * - UsageCollector     — `usage.status` + `usage.cost` RPC → 使用量/成本
+ * - PresenceCollector  — `system-presence` RPC → 在线客户端/节点
+ * - CronCollector      — `cron.status` + `cron.list` RPC → 定时任务
+ * - ModelCollector     — `models.list` RPC → 可用模型
+ * - NodeCollector      — `node.list` RPC → IoT 设备节点
+ * - SkillCollector     — `skills.status` + `skills.bins` RPC → Skills
+ * - RuntimeCollector   — Node.js process.* → 堆内存/事件循环延迟
  */
 
 import type { PluginApi, MetricCollector, MetricDefinition, MetricSample } from "./types.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { GatewayCollector } from "./collectors/gateway.js";
-import { AgentCollector } from "./collectors/agent.js";
-import { ChannelCollector } from "./collectors/channel.js";
+import { setRuntime } from "./ws-bridge.js";
+
+// 采集器导入
+import { HealthCollector } from "./collectors/health.js";
+import { ChannelCollector } from "./collectors/channels.js";
+import { SessionCollector } from "./collectors/sessions.js";
+import { UsageCollector } from "./collectors/usage.js";
+import { PresenceCollector } from "./collectors/presence.js";
+import { CronCollector } from "./collectors/cron.js";
+import { ModelCollector } from "./collectors/models.js";
+import { NodeCollector } from "./collectors/nodes.js";
+import { SkillCollector } from "./collectors/skills.js";
 import { RuntimeCollector } from "./collectors/runtime.js";
-import { MemoryCollector } from "./collectors/memory.js";
+
+// 格式化器导入
 import { formatPrometheus } from "./formatters/prometheus.js";
 import { formatJson } from "./formatters/json.js";
 
@@ -55,7 +70,7 @@ async function collectAll(): Promise<{ definitions: MetricDefinition[]; samples:
 }
 
 /**
- * GET /metrics - Prometheus text format
+ * GET /metrics — Prometheus text format
  * 标准 Prometheus 采集端点
  */
 async function metricsHandler(_req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -69,7 +84,7 @@ async function metricsHandler(_req: IncomingMessage, res: ServerResponse): Promi
 }
 
 /**
- * GET /metrics/per-object - 按对象分组的 JSON 指标
+ * GET /metrics/per-object — 按对象分组的 JSON 指标
  */
 async function perObjectHandler(_req: IncomingMessage, res: ServerResponse): Promise<void> {
   const { definitions, samples } = await collectAll();
@@ -80,29 +95,21 @@ async function perObjectHandler(_req: IncomingMessage, res: ServerResponse): Pro
 }
 
 /**
- * GET /metrics/detailed - 过滤指标
- * 支持 query 参数：family（指标名前缀）、agent（Agent ID）
+ * GET /metrics/detailed — 过滤指标
+ * 支持 query 参数：family（指标名前缀过滤）
  */
 async function detailedHandler(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
   const familyFilter = url.searchParams.get("family");
-  const agentFilter = url.searchParams.get("agent");
 
   const { definitions, samples } = await collectAll();
 
-  // 应用过滤条件
   let filteredDefs = definitions;
   let filteredSamples = samples;
 
   if (familyFilter) {
     filteredDefs = definitions.filter((d) => d.name.includes(familyFilter));
     filteredSamples = samples.filter((s) => s.name.includes(familyFilter));
-  }
-
-  if (agentFilter) {
-    filteredSamples = filteredSamples.filter(
-      (s) => s.labels?.agent_id === agentFilter || !s.labels?.agent_id
-    );
   }
 
   const output = formatJson(filteredDefs, filteredSamples);
@@ -117,23 +124,33 @@ async function detailedHandler(req: IncomingMessage, res: ServerResponse): Promi
  * @param api - Gateway 注入的插件 API
  */
 export default function register(api: PluginApi): void {
-  // 初始化采集器
+  // 1. 保存 Runtime 引用（供 ws-bridge 使用）
+  setRuntime(api.runtime);
+
+  // 2. 初始化采集器（全部基于真实 Gateway RPC 方法）
   collectors = [
-    new GatewayCollector(api.runtime),
-    new AgentCollector(api.runtime),
-    new ChannelCollector(api.runtime),
-    new RuntimeCollector(),
-    new MemoryCollector(api.runtime),
+    new HealthCollector(),          // health RPC
+    new ChannelCollector(),         // channels.status RPC
+    new SessionCollector(),         // sessions.list RPC
+    new UsageCollector(),           // usage.status + usage.cost RPC
+    new PresenceCollector(),        // system-presence RPC
+    new CronCollector(),            // cron.status + cron.list RPC
+    new ModelCollector(),           // models.list RPC
+    new NodeCollector(),            // node.list RPC
+    new SkillCollector(),           // skills.status + skills.bins RPC
+    new RuntimeCollector(),         // Node.js process.* (始终可用)
   ];
 
-  // 注册 HTTP 端点
+  // 3. 注册 HTTP 端点
   api.registerHttpRoute({ path: "/metrics", handler: metricsHandler });
   api.registerHttpRoute({ path: "/metrics/per-object", handler: perObjectHandler });
   api.registerHttpRoute({ path: "/metrics/detailed", handler: detailedHandler });
 
-  console.log("[openclaw_prometheus] Plugin registered - Prometheus metrics endpoints ready");
+  // 4. 输出注册日志
+  const collectorNames = collectors.map((c) => c.name).join(", ");
+  console.log(`[openclaw_prometheus] Plugin registered — ${collectors.length} collectors: ${collectorNames}`);
   console.log("[openclaw_prometheus] Endpoints:");
-  console.log("  GET /metrics             - Prometheus text format");
-  console.log("  GET /metrics/per-object  - JSON per-object metrics");
-  console.log("  GET /metrics/detailed    - Filtered metrics (?family=&agent=)");
+  console.log("  GET /metrics             — Prometheus text format");
+  console.log("  GET /metrics/per-object  — JSON per-object metrics");
+  console.log("  GET /metrics/detailed    — Filtered metrics (?family=)");
 }
