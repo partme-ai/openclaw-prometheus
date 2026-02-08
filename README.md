@@ -79,7 +79,6 @@ pnpm dev   # watch mode
 |--------|--------------|
 | [openclaw_auth_oauth2](https://github.com/partme-ai/openclaw_auth_oauth2) | OAuth2 authentication |
 | [openclaw_cluster](https://github.com/partme-ai/openclaw_cluster) | Cluster coordination (discovery, config sync, session store, proxy) |
-| [openclaw_ics](https://github.com/partme-ai/openclaw_ics) | Intelligent Customer Service API |
 | [openclaw_management](https://github.com/partme-ai/openclaw_management) | Management REST API, Prometheus, definitions, Web UI |
 | [openclaw_mqtt](https://github.com/partme-ai/openclaw_mqtt) | MQTT protocol adapter |
 | [openclaw_prometheus](https://github.com/partme-ai/openclaw_prometheus) | Prometheus metrics exporter |
@@ -87,7 +86,6 @@ pnpm dev   # watch mode
 | [openclaw_tracing](https://github.com/partme-ai/openclaw_tracing) | Distributed tracing |
 | [openclaw_web_mqtt](https://github.com/partme-ai/openclaw_web_mqtt) | WebSocket MQTT |
 | [openclaw_web_stomp](https://github.com/partme-ai/openclaw_web_stomp) | WebSocket STOMP |
-| [openclaw_wecom_kf](https://github.com/partme-ai/openclaw_wecom_kf) | WeChat Work customer service channel |
 
 ## License
 
