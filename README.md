@@ -1,6 +1,16 @@
+<div align="center">
+
 # openclaw_prometheus
 
-Prometheus metrics exporter plugin for OpenClaw Gateway.
+**Prometheus metrics exporter — Gateway · Agent · Channel · Runtime · Memory**
+
+![Version](https://img.shields.io/badge/Version-0.1.0-blue) ![License](https://img.shields.io/badge/License-MIT-green)
+
+</div>
+
+[中文](README_CN.md) | English
+
+---
 
 ## Features
 
@@ -63,14 +73,21 @@ pnpm build
 pnpm dev   # watch mode
 ```
 
-## Related Plugins
+## Related OpenClaw plugins
 
 | Plugin | Description |
-|---|---|
-| [openclaw_management](../openclaw_management) | REST API + management UI (has its own metrics overview) |
-| [openclaw_cluster](../openclaw_cluster) | Cluster coordination |
-| [openclaw_mqtt](../openclaw_mqtt) | MQTT protocol bridge |
-| [openclaw_web_stomp](../openclaw_web_stomp) | STOMP over WebSocket |
+|--------|--------------|
+| [openclaw_auth_oauth2](https://github.com/partme-ai/openclaw_auth_oauth2) | OAuth2 authentication |
+| [openclaw_cluster](https://github.com/partme-ai/openclaw_cluster) | Cluster coordination (discovery, config sync, session store, proxy) |
+| [openclaw_ics](https://github.com/partme-ai/openclaw_ics) | Intelligent Customer Service API |
+| [openclaw_management](https://github.com/partme-ai/openclaw_management) | Management REST API, Prometheus, definitions, Web UI |
+| [openclaw_mqtt](https://github.com/partme-ai/openclaw_mqtt) | MQTT protocol adapter |
+| [openclaw_prometheus](https://github.com/partme-ai/openclaw_prometheus) | Prometheus metrics exporter |
+| [openclaw_stomp](https://github.com/partme-ai/openclaw_stomp) | STOMP server |
+| [openclaw_tracing](https://github.com/partme-ai/openclaw_tracing) | Distributed tracing |
+| [openclaw_web_mqtt](https://github.com/partme-ai/openclaw_web_mqtt) | WebSocket MQTT |
+| [openclaw_web_stomp](https://github.com/partme-ai/openclaw_web_stomp) | WebSocket STOMP |
+| [openclaw_wecom_kf](https://github.com/partme-ai/openclaw_wecom_kf) | WeChat Work customer service channel |
 
 ## License
 
