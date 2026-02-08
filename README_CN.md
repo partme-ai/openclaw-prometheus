@@ -1,6 +1,16 @@
+<div align="center">
+
 # openclaw_prometheus
 
-OpenClaw Gateway 的 Prometheus 指标导出插件。
+**Prometheus 指标导出 — Gateway · Agent · Channel · Runtime · Memory**
+
+![Version](https://img.shields.io/badge/Version-0.1.0-blue) ![License](https://img.shields.io/badge/License-MIT-green)
+
+</div>
+
+中文 | [English](README.md)
+
+---
 
 ## 功能
 
@@ -77,14 +87,21 @@ pnpm build
 pnpm dev   # 监听模式
 ```
 
-## 相关插件
+## OpenClaw 生态插件
 
 | 插件 | 说明 |
-|---|---|
-| [openclaw_management](../openclaw_management) | REST API + 管理 UI（自带指标概览） |
-| [openclaw_cluster](../openclaw_cluster) | 集群协调 |
-| [openclaw_mqtt](../openclaw_mqtt) | MQTT 协议桥接 |
-| [openclaw_web_stomp](../openclaw_web_stomp) | STOMP over WebSocket |
+|------|------|
+| [openclaw_auth_oauth2](https://github.com/partme-ai/openclaw_auth_oauth2) | OAuth2 认证 |
+| [openclaw_cluster](https://github.com/partme-ai/openclaw_cluster) | 集群协调（发现 / 配置同步 / 会话存储 / 代理） |
+| [openclaw_ics](https://github.com/partme-ai/openclaw_ics) | 智能客服业务 API |
+| [openclaw_management](https://github.com/partme-ai/openclaw_management) | 管理 REST API + Prometheus + 定义导出/导入 + Web UI |
+| [openclaw_mqtt](https://github.com/partme-ai/openclaw_mqtt) | MQTT 协议接入 |
+| [openclaw_prometheus](https://github.com/partme-ai/openclaw_prometheus) | Prometheus 指标导出 |
+| [openclaw_stomp](https://github.com/partme-ai/openclaw_stomp) | STOMP 服务端 |
+| [openclaw_tracing](https://github.com/partme-ai/openclaw_tracing) | 链路追踪 |
+| [openclaw_web_mqtt](https://github.com/partme-ai/openclaw_web_mqtt) | WebSocket MQTT |
+| [openclaw_web_stomp](https://github.com/partme-ai/openclaw_web_stomp) | WebSocket STOMP |
+| [openclaw_wecom_kf](https://github.com/partme-ai/openclaw_wecom_kf) | 企微客服渠道 |
 
 ## 许可证
 
