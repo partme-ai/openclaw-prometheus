@@ -1,6 +1,6 @@
 {
   "name": "@partme.ai/openclaw_prometheus",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Prometheus metrics exporter for OpenClaw Gateway - based on real Gateway RPC methods (health, sessions.list, channels.status, usage, presence, cron, models, nodes, skills)",
   "type": "module",
   "main": "dist/index.js",
@@ -27,7 +27,9 @@
     "dist",
     "openclaw.plugin.json",
     "README.md",
-    "README_CN.md"
+    "README_CN.md",
+    "clawdbot.plugin.json",
+    "moltbot.plugin.json"
   ],
   "publishConfig": {
     "access": "public"
@@ -51,5 +53,19 @@
     "extensions": [
       "./dist/index.js"
     ]
+  },
+  "clawdbot": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  },
+  "moltbot": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  },
+  "peerDependencies": {
+    "clawdbot": "*",
+    "moltbot": "*"
   }
 }
