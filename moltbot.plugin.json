@@ -1,0 +1,56 @@
+{
+  "id": "openclaw_prometheus",
+  "name": "openclaw_prometheus",
+  "version": "0.2.4",
+  "description": "Prometheus metrics exporter for OpenClaw Gateway - based on real Gateway RPC methods (health, sessions.list, channels.status, usage, presence, cron, models, nodes, skills)",
+  "main": "dist/index.js",
+  "channels": [],
+  "commands": [],
+  "skills": [],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "port": {
+        "type": "number",
+        "default": 9090,
+        "description": "Dedicated metrics HTTP port (0 to use Gateway port)"
+      },
+      "path": {
+        "type": "string",
+        "default": "/metrics",
+        "description": "Metrics endpoint path"
+      },
+      "collectIntervalMs": {
+        "type": "number",
+        "default": 15000,
+        "description": "Metrics collection interval"
+      },
+      "includeRuntime": {
+        "type": "boolean",
+        "default": true,
+        "description": "Include Node.js runtime metrics"
+      }
+    }
+  },
+  "uiHints": {
+    "port": {
+      "label": "Metrics Port",
+      "placeholder": "9090"
+    },
+    "path": {
+      "label": "Metrics Path",
+      "placeholder": "/metrics"
+    },
+    "collectIntervalMs": {
+      "label": "Collect Interval (ms)",
+      "placeholder": "15000"
+    },
+    "includeRuntime": {
+      "label": "Include Runtime Metrics",
+      "type": "toggle"
+    }
+  },
+  "capabilities": {
+    "metricsExport": true
+  }
+}
