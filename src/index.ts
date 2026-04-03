@@ -23,7 +23,7 @@
  * - RuntimeCollector   — Node.js process.* → 堆内存/事件循环延迟
  */
 
-import type { PluginApi, MetricCollector, MetricDefinition, MetricSample } from "./types.js";
+import type { GatewayRuntime, MetricCollector, MetricDefinition, MetricSample } from "./types.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { setRuntime } from "./ws-bridge.js";
 
@@ -118,39 +118,35 @@ async function detailedHandler(req: IncomingMessage, res: ServerResponse): Promi
 }
 
 /**
- * 插件注册入口
- * 由 OpenClaw Gateway 在加载插件时调用
- *
- * @param api - Gateway 注入的插件 API
+ * 插件注册入口（旧版兼容：直接导出 register(api)）
  */
-export default function register(api: PluginApi): void {
-  // 1. 保存 Runtime 引用（供 ws-bridge 使用）
-  setRuntime(api.runtime);
+export default function register(api: {
+  runtime: unknown;
+  registerHttpRoute: (params: { path: string; handler: (req: IncomingMessage, res: ServerResponse) => Promise<void> | void }) => void;
+}): void {
+    setRuntime(api.runtime as unknown as GatewayRuntime);
 
-  // 2. 初始化采集器（全部基于真实 Gateway RPC 方法）
-  collectors = [
-    new HealthCollector(),          // health RPC
-    new ChannelCollector(),         // channels.status RPC
-    new SessionCollector(),         // sessions.list RPC
-    new UsageCollector(),           // usage.status + usage.cost RPC
-    new PresenceCollector(),        // system-presence RPC
-    new CronCollector(),            // cron.status + cron.list RPC
-    new ModelCollector(),           // models.list RPC
-    new NodeCollector(),            // node.list RPC
-    new SkillCollector(),           // skills.status + skills.bins RPC
-    new RuntimeCollector(),         // Node.js process.* (始终可用)
-  ];
+    collectors = [
+      new HealthCollector(),
+      new ChannelCollector(),
+      new SessionCollector(),
+      new UsageCollector(),
+      new PresenceCollector(),
+      new CronCollector(),
+      new ModelCollector(),
+      new NodeCollector(),
+      new SkillCollector(),
+      new RuntimeCollector(),
+    ];
 
-  // 3. 注册 HTTP 端点
-  api.registerHttpRoute({ path: "/metrics", handler: metricsHandler });
-  api.registerHttpRoute({ path: "/metrics/per-object", handler: perObjectHandler });
-  api.registerHttpRoute({ path: "/metrics/detailed", handler: detailedHandler });
+    api.registerHttpRoute({ path: "/metrics", handler: metricsHandler });
+    api.registerHttpRoute({ path: "/metrics/per-object", handler: perObjectHandler });
+    api.registerHttpRoute({ path: "/metrics/detailed", handler: detailedHandler });
 
-  // 4. 输出注册日志
-  const collectorNames = collectors.map((c) => c.name).join(", ");
-  console.log(`[openclaw_prometheus] Plugin registered — ${collectors.length} collectors: ${collectorNames}`);
-  console.log("[openclaw_prometheus] Endpoints:");
-  console.log("  GET /metrics             — Prometheus text format");
-  console.log("  GET /metrics/per-object  — JSON per-object metrics");
-  console.log("  GET /metrics/detailed    — Filtered metrics (?family=)");
+    const collectorNames = collectors.map((c) => c.name).join(", ");
+    console.log(`[openclaw_prometheus] Plugin registered — ${collectors.length} collectors: ${collectorNames}`);
+    console.log("[openclaw_prometheus] Endpoints:");
+    console.log("  GET /metrics             — Prometheus text format");
+    console.log("  GET /metrics/per-object  — JSON per-object metrics");
+    console.log("  GET /metrics/detailed    — Filtered metrics (?family=)");
 }
