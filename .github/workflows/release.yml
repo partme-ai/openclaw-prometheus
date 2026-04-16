@@ -1,5 +1,6 @@
 # Build release package and publish on version tags (v*).
 # Dual publish: npmjs (`@partme.ai/*`) + GitHub Packages (`@<github-owner>/*`), then create a GitHub Release.
+# Aligned with openclaw-web-mqtt/.github/workflows/release.yml (artifact / comment names only).
 name: Release
 
 on:

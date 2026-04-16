@@ -1,11 +1,13 @@
 # Continuous integration: install, typecheck, build, test, upload dist artifact.
+# Aligned with openclaw-web-mqtt/.github/workflows/ci.yml (project-specific artifact name only).
 name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, "release/**"]
   pull_request:
     branches: [main, master]
+  workflow_dispatch: {}
 
 permissions:
   contents: read
