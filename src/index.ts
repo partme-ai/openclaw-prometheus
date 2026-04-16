@@ -1,5 +1,5 @@
 /**
- * openclaw_prometheus 插件入口
+ * openclaw-prometheus 插件入口
  *
  * 通过 Gateway RPC（health / channels.status / sessions.list 等）采集指标，
  * 以 Prometheus text format 与 JSON 暴露；可选 Bearer 鉴权与采集缓存。
@@ -31,7 +31,7 @@ import { assertScrapeAuthorized } from "./scrape-auth.js";
 import { CollectCache } from "./collect-cache.js";
 import { PLUGIN_VERSION } from "./version.js";
 
-const PLUGIN_ID = "openclaw_prometheus";
+const PLUGIN_ID = "openclaw-prometheus";
 
 /** 内部采集状态（每个 register 调用一组） */
 let collectors: MetricCollector[] = [];
@@ -216,8 +216,8 @@ function registerMetricsRoutes(api: OpenClawPluginApi): void {
   api.registerHttpRoute({ path: metricsChildPath(base, "/detailed"), handler: detailedHandler });
 
   const names = collectors.map((c) => c.name).join(", ");
-  console.log(`[openclaw_prometheus] Plugin registered — ${collectors.length} collectors: ${names}`);
-  console.log(`[openclaw_prometheus] metrics path: ${base} (cache ${cfg.collectIntervalMs}ms, runtime ${cfg.includeRuntime ? "on" : "off"}, scrapeAuth ${cfg.scrapeAuthEnabled ? "on" : "off"})`);
+  console.log(`[openclaw-prometheus] Plugin registered — ${collectors.length} collectors: ${names}`);
+  console.log(`[openclaw-prometheus] metrics path: ${base} (cache ${cfg.collectIntervalMs}ms, runtime ${cfg.includeRuntime ? "on" : "off"}, scrapeAuth ${cfg.scrapeAuthEnabled ? "on" : "off"})`);
   console.log(`  GET ${base}             — Prometheus text`);
   console.log(`  GET ${metricsChildPath(base, "/per-object")}  — JSON`);
   console.log(`  GET ${metricsChildPath(base, "/detailed")}    — JSON (?family=)`);
@@ -225,7 +225,7 @@ function registerMetricsRoutes(api: OpenClawPluginApi): void {
 
 export default definePluginEntry({
   id: PLUGIN_ID,
-  name: "openclaw_prometheus",
+  name: "openclaw-prometheus",
   description:
     "Prometheus metrics exporter for OpenClaw Gateway — RPC-backed gauges and optional scrape auth",
   register(api: OpenClawPluginApi) {

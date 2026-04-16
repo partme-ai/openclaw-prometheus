@@ -1,5 +1,5 @@
 {
-  "name": "@partme.ai/openclaw_prometheus",
+  "name": "@partme.ai/openclaw-prometheus",
   "version": "0.2.7",
   "description": "Prometheus metrics exporter for OpenClaw Gateway - based on real Gateway RPC methods (health, sessions.list, channels.status, usage, presence, cron, models, nodes, skills)",
   "type": "module",
@@ -39,7 +39,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/partme-ai/openclaw_prometheus.git"
+    "url": "git+https://github.com/partme-ai/openclaw-prometheus.git"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

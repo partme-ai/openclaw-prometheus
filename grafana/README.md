@@ -1,6 +1,6 @@
 # OpenClaw Grafana dashboards
 
-Ready-to-import Grafana dashboard JSON for metrics exposed by `@partme.ai/openclaw_prometheus` (Prometheus scrape).
+Ready-to-import Grafana dashboard JSON for metrics exposed by `@partme.ai/openclaw-prometheus` (Prometheus scrape).
 
 | File | Use case |
 |------|----------|

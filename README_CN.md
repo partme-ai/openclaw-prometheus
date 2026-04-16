@@ -15,7 +15,7 @@
 
 ## 简介
 
-`@partme.ai/openclaw_prometheus` 是面向 [OpenClaw](https://github.com/openclaw/openclaw) 的**非渠道**插件，按官方文档使用 [`definePluginEntry`](https://docs.openclaw.ai/plugins/sdk-entrypoints#definepluginentry)（见 [Building plugins](https://docs.openclaw.ai/plugins/building-plugins)），在 Gateway 上注册 HTTP 路由。采集器通过 `gatewayCall` / `invoke` 调用 `health`、`channels.status`、`sessions.list`、`usage.*`、`system-presence`、`cron.*`、`models.list`、`node.list`、`skills.*` 等 RPC，并输出 Prometheus 文本或 JSON。
+`@partme.ai/openclaw-prometheus` 是面向 [OpenClaw](https://github.com/openclaw/openclaw) 的**非渠道**插件，按官方文档使用 [`definePluginEntry`](https://docs.openclaw.ai/plugins/sdk-entrypoints#definepluginentry)（见 [Building plugins](https://docs.openclaw.ai/plugins/building-plugins)），在 Gateway 上注册 HTTP 路由。采集器通过 `gatewayCall` / `invoke` 调用 `health`、`channels.status`、`sessions.list`、`usage.*`、`system-presence`、`cron.*`、`models.list`、`node.list`、`skills.*` 等 RPC，并输出 Prometheus 文本或 JSON。
 
 ## 核心能力
 
@@ -23,7 +23,7 @@
 - **端点**：`{path}`（默认 `/metrics`）暴露 Prometheus；`{path}/per-object`、`{path}/detailed?family=` 提供 JSON。
 - **采集缓存**：`collectIntervalMs` 在多次抓取间复用上一次成功结果，减轻 RPC 压力；设为 `0` 则每次抓取全量采集。
 - **元指标**：`openclaw_exporter_build_info`、`openclaw_metrics_last_scrape_duration_seconds`。
-- **可选抓取鉴权**：推荐使用环境变量 `OPENCLAW_PROMETHEUS_BEARER_TOKEN`；仅本地调试可在配置中写 `scrapeAuth.bearerToken`。
+- **可选抓取鉴权**：推荐使用环境变量 `openclaw-prometheus_BEARER_TOKEN`；仅本地调试可在配置中写 `scrapeAuth.bearerToken`。
 - **企业级运维取向**（命名与分层方式参考 [RabbitMQ Prometheus 文档](https://www.rabbitmq.com/docs/prometheus) 中的实践：专用路径、聚合与按实体 JSON、TLS 由 Gateway/反向代理终止、控制高基数标签使用等）。
 
 ### 生命周期
@@ -69,7 +69,7 @@
 ### 安装
 
 ```bash
-openclaw plugins install @partme.ai/openclaw_prometheus
+openclaw plugins install @partme.ai/openclaw-prometheus
 ```
 
 ### 最小配置（`openclaw.json`）
@@ -78,7 +78,7 @@ openclaw plugins install @partme.ai/openclaw_prometheus
 {
   "plugins": {
     "entries": {
-      "openclaw_prometheus": {
+      "openclaw-prometheus": {
         "enabled": true,
         "config": {
           "path": "/metrics",
@@ -96,13 +96,13 @@ openclaw plugins install @partme.ai/openclaw_prometheus
 
 ### Prometheus 抓取（Bearer）
 
-在 Gateway 环境设置 `OPENCLAW_PROMETHEUS_BEARER_TOKEN`，配置中 `scrapeAuth.enabled: true`，Prometheus 使用 `bearer_token_file` 指向同一密钥文件。
+在 Gateway 环境设置 `openclaw-prometheus_BEARER_TOKEN`，配置中 `scrapeAuth.enabled: true`，Prometheus 使用 `bearer_token_file` 指向同一密钥文件。
 
 ### 命令行探测
 
 ```bash
 pnpm run test:client -- http://127.0.0.1:18789/metrics
-OPENCLAW_PROMETHEUS_BEARER_TOKEN=secret pnpm run test:client -- http://127.0.0.1:18789/metrics
+openclaw-prometheus_BEARER_TOKEN=secret pnpm run test:client -- http://127.0.0.1:18789/metrics
 ```
 
 ## Grafana 看板

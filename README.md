@@ -14,7 +14,7 @@
 
 ## Introduction
 
-`@partme.ai/openclaw_prometheus` is a **non-channel** plugin for [OpenClaw](https://github.com/openclaw/openclaw). It uses [`definePluginEntry`](https://docs.openclaw.ai/plugins/sdk-entrypoints#definepluginentry) (see [Building plugins](https://docs.openclaw.ai/plugins/building-plugins)) to register HTTP routes on the Gateway. Collectors call documented Gateway RPC methods (`health`, `channels.status`, `sessions.list`, `usage.*`, `system-presence`, `cron.*`, `models.list`, `node.list`, `skills.*`) and expose the result as Prometheus text or JSON.
+`@partme.ai/openclaw-prometheus` is a **non-channel** plugin for [OpenClaw](https://github.com/openclaw/openclaw). It uses [`definePluginEntry`](https://docs.openclaw.ai/plugins/sdk-entrypoints#definepluginentry) (see [Building plugins](https://docs.openclaw.ai/plugins/building-plugins)) to register HTTP routes on the Gateway. Collectors call documented Gateway RPC methods (`health`, `channels.status`, `sessions.list`, `usage.*`, `system-presence`, `cron.*`, `models.list`, `node.list`, `skills.*`) and expose the result as Prometheus text or JSON.
 
 ## Core capabilities
 
@@ -22,7 +22,7 @@
 - **Endpoints**: Prometheus exposition on `{path}` (default `/metrics`), JSON on `{path}/per-object` and `{path}/detailed?family=`.
 - **Collection cache**: `collectIntervalMs` reuses the last successful scrape bundle to reduce RPC load under frequent Prometheus scrapes (set `0` to disable).
 - **Meta metrics**: `openclaw_exporter_build_info`, `openclaw_metrics_last_scrape_duration_seconds`.
-- **Optional scrape auth**: Bearer token via `OPENCLAW_PROMETHEUS_BEARER_TOKEN` (recommended) or dev-only `scrapeAuth.bearerToken` in config.
+- **Optional scrape auth**: Bearer token via `openclaw-prometheus_BEARER_TOKEN` (recommended) or dev-only `scrapeAuth.bearerToken` in config.
 - **Enterprise-style operations** (aligned with common Prometheus exporter practice and ideas from [RabbitMQ’s Prometheus guide](https://www.rabbitmq.com/docs/prometheus)): stable metric names, separate “full text” vs JSON drill-down, TLS termination at the Gateway/reverse proxy, and cardinality-aware use of `/detailed?family=`.
 
 ### Plugin lifecycle
@@ -68,7 +68,7 @@ Default `{path}` is `/metrics`.
 ### Install
 
 ```bash
-openclaw plugins install @partme.ai/openclaw_prometheus
+openclaw plugins install @partme.ai/openclaw-prometheus
 ```
 
 ### Minimal config (`openclaw.json`)
@@ -77,7 +77,7 @@ openclaw plugins install @partme.ai/openclaw_prometheus
 {
   "plugins": {
     "entries": {
-      "openclaw_prometheus": {
+      "openclaw-prometheus": {
         "enabled": true,
         "config": {
           "path": "/metrics",
@@ -105,13 +105,13 @@ scrape_configs:
     metrics_path: /metrics
 ```
 
-Set `scrapeAuth.enabled: true` and store the same secret in `OPENCLAW_PROMETHEUS_BEARER_TOKEN` on the Gateway host.
+Set `scrapeAuth.enabled: true` and store the same secret in `openclaw-prometheus_BEARER_TOKEN` on the Gateway host.
 
 ### Manual probe (CLI)
 
 ```bash
 pnpm run test:client -- http://127.0.0.1:18789/metrics
-OPENCLAW_PROMETHEUS_BEARER_TOKEN=secret pnpm run test:client -- http://127.0.0.1:18789/metrics
+openclaw-prometheus_BEARER_TOKEN=secret pnpm run test:client -- http://127.0.0.1:18789/metrics
 ```
 
 ## Grafana dashboards

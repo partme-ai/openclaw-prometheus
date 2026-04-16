@@ -1,5 +1,5 @@
 /**
- * 解析插件侧配置（来自 `plugins.entries.openclaw_prometheus.config` / `api.pluginConfig`）。
+ * 解析插件侧配置（来自 `plugins.entries.openclaw-prometheus.config` / `api.pluginConfig`）。
  */
 
 /** 与 openclaw.plugin.json 中 configSchema 对齐的运行时配置形状 */
@@ -11,7 +11,7 @@ export type PrometheusPluginUserConfig = {
   scrapeAuth?: {
     /** 为 true 时要求请求携带 Bearer Token（优先环境变量，见 README） */
     enabled?: boolean;
-    /** 仅建议用于本地测试；生产请使用 OPENCLAW_PROMETHEUS_BEARER_TOKEN */
+    /** 仅建议用于本地测试；生产请使用 openclaw-prometheus_BEARER_TOKEN */
     bearerToken?: string;
   };
 };
@@ -26,7 +26,7 @@ export type ResolvedPrometheusConfig = {
   scrapeBearerToken: string | undefined;
 };
 
-const ENV_BEARER = "OPENCLAW_PROMETHEUS_BEARER_TOKEN";
+const ENV_BEARER = "openclaw-prometheus_BEARER_TOKEN";
 
 /**
  * 将用户配置合并为带默认值的解析结果。

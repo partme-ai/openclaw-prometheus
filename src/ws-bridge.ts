@@ -39,7 +39,7 @@ export function setRuntime(runtime: GatewayRuntime): void {
 export function getRuntime(): GatewayRuntime {
   if (!_runtime) {
     throw new Error(
-      "[openclaw_prometheus] Gateway runtime not initialized. Plugin not registered?"
+      "[openclaw-prometheus] Gateway runtime not initialized. Plugin not registered?"
     );
   }
   return _runtime;

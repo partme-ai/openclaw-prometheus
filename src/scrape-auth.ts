@@ -25,7 +25,7 @@ export function assertScrapeAuthorized(
   if (!cfg.scrapeBearerToken) {
     res.writeHead(503, { "Content-Type": "text/plain; charset=utf-8" });
     res.end(
-      "openclaw_prometheus: scrapeAuth.enabled but no bearer token (set OPENCLAW_PROMETHEUS_BEARER_TOKEN or plugins.entries.openclaw_prometheus.config.scrapeAuth.bearerToken for dev only)\n",
+      "openclaw-prometheus: scrapeAuth.enabled but no bearer token (set openclaw-prometheus_BEARER_TOKEN or plugins.entries.openclaw-prometheus.config.scrapeAuth.bearerToken for dev only)\n",
     );
     return false;
   }

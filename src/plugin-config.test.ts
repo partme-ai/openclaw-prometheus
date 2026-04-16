@@ -24,13 +24,13 @@ describe("resolvePrometheusConfig", () => {
   it("reads bearer token from env when scrapeAuth enabled", () => {
     const c = resolvePrometheusConfig(
       { scrapeAuth: { enabled: true } },
-      { OPENCLAW_PROMETHEUS_BEARER_TOKEN: "abc" } as NodeJS.ProcessEnv,
+      { openclaw-prometheus_BEARER_TOKEN: "abc" } as NodeJS.ProcessEnv,
     );
     expect(c.scrapeAuthEnabled).toBe(true);
     expect(c.scrapeBearerToken).toBe("abc");
   });
 
   it("exposes env name helper", () => {
-    expect(scrapeTokenEnvName()).toBe("OPENCLAW_PROMETHEUS_BEARER_TOKEN");
+    expect(scrapeTokenEnvName()).toBe("openclaw-prometheus_BEARER_TOKEN");
   });
 });

@@ -25,7 +25,7 @@ describe("prometheusPlugin register", () => {
     const routes: Array<{ path: string; handler: (a: IncomingMessage, b: ServerResponse) => Promise<void> }> = [];
 
     const api = {
-      id: "openclaw_prometheus",
+      id: "openclaw-prometheus",
       runtime: {
         gatewayCall: mockGatewayCall,
       },
