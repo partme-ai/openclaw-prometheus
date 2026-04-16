@@ -24,7 +24,7 @@ describe("resolvePrometheusConfig", () => {
   it("reads bearer token from env when scrapeAuth enabled", () => {
     const c = resolvePrometheusConfig(
       { scrapeAuth: { enabled: true } },
-      { openclaw-prometheus_BEARER_TOKEN: "abc" } as NodeJS.ProcessEnv,
+      { "openclaw-prometheus_BEARER_TOKEN": "abc" } as NodeJS.ProcessEnv,
     );
     expect(c.scrapeAuthEnabled).toBe(true);
     expect(c.scrapeBearerToken).toBe("abc");
