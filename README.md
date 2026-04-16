@@ -114,6 +114,10 @@ pnpm run test:client -- http://127.0.0.1:18789/metrics
 OPENCLAW_PROMETHEUS_BEARER_TOKEN=secret pnpm run test:client -- http://127.0.0.1:18789/metrics
 ```
 
+## Grafana dashboards
+
+Import JSON from [`grafana/`](./grafana/) (single-node and cluster layouts). See [`grafana/README.md`](./grafana/README.md).
+
 ## Development
 
 ```bash

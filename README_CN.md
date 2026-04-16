@@ -105,6 +105,10 @@ pnpm run test:client -- http://127.0.0.1:18789/metrics
 OPENCLAW_PROMETHEUS_BEARER_TOKEN=secret pnpm run test:client -- http://127.0.0.1:18789/metrics
 ```
 
+## Grafana 看板
+
+从 [`grafana/`](./grafana/) 导入单节点与集群两套 JSON，说明见 [`grafana/README.md`](./grafana/README.md)。
+
 ## 开发与测试
 
 ```bash

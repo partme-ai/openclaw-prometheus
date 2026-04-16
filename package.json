@@ -30,6 +30,7 @@
     "openclaw.plugin.json",
     "README.md",
     "README_CN.md",
+    "grafana",
     "clawdbot.plugin.json",
     "moltbot.plugin.json"
   ],
