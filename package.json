@@ -1,6 +1,6 @@
 {
-  "name": "@partme.ai/openclaw_prometheus",
-  "version": "0.2.3",
+  "name": "@partme.ai/openclaw-prometheus",
+  "version": "0.2.7",
   "description": "Prometheus metrics exporter for OpenClaw Gateway - based on real Gateway RPC methods (health, sessions.list, channels.status, usage, presence, cron, models, nodes, skills)",
   "type": "module",
   "main": "dist/index.js",
@@ -12,7 +12,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:client": "tsx scripts/test-metrics-client.ts",
+    "test:all": "pnpm test"
   },
   "keywords": [
     "openclaw",
@@ -27,14 +29,17 @@
     "dist",
     "openclaw.plugin.json",
     "README.md",
-    "README_CN.md"
+    "README_CN.md",
+    "grafana",
+    "clawdbot.plugin.json",
+    "moltbot.plugin.json"
   ],
   "publishConfig": {
     "access": "public"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/partme-ai/openclaw_prometheus.git"
+    "url": "git+https://github.com/partme-ai/openclaw-prometheus.git"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -44,12 +49,29 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "tsup": "^8.0.0",
+    "tsx": "^4.20.6",
     "typescript": "^5.7.0",
     "vitest": "^4.0.18"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.4.0"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
   },
   "openclaw": {
     "extensions": [
       "./dist/index.js"
-    ]
+    ],
+    "compat": {
+      "pluginApi": ">=2026.3.24-beta.2",
+      "minGatewayVersion": "2026.3.24-beta.2"
+    },
+    "build": {
+      "openclawVersion": "2026.4.0",
+      "pluginSdkVersion": "2026.4.0"
+    }
   }
 }

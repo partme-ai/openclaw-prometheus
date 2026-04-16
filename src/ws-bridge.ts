@@ -39,7 +39,7 @@ export function setRuntime(runtime: GatewayRuntime): void {
 export function getRuntime(): GatewayRuntime {
   if (!_runtime) {
     throw new Error(
-      "[openclaw_prometheus] Gateway runtime not initialized. Plugin not registered?"
+      "[openclaw-prometheus] Gateway runtime not initialized. Plugin not registered?"
     );
   }
   return _runtime;
@@ -64,7 +64,7 @@ export async function rpcCall<T = unknown>(
   params?: Record<string, unknown>
 ): Promise<T> {
   const runtime = getRuntime();
-  const runtimeAny = runtime as Record<string, unknown>;
+  const runtimeAny = runtime as unknown as Record<string, unknown>;
 
   // 策略 1: gatewayCall（首选）
   if (typeof runtimeAny.gatewayCall === "function") {

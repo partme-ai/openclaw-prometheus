@@ -1,5 +1,5 @@
 /**
- * openclaw_prometheus 类型定义
+ * openclaw-prometheus 类型定义
  *
  * 基于 OpenClaw 插件系统的真实接口，
  * 以及 Gateway RPC 方法的实际响应结构。
