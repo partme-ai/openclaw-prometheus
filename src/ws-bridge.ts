@@ -64,7 +64,7 @@ export async function rpcCall<T = unknown>(
   params?: Record<string, unknown>
 ): Promise<T> {
   const runtime = getRuntime();
-  const runtimeAny = runtime as Record<string, unknown>;
+  const runtimeAny = runtime as unknown as Record<string, unknown>;
 
   // 策略 1: gatewayCall（首选）
   if (typeof runtimeAny.gatewayCall === "function") {

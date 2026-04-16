@@ -1,7 +1,7 @@
 {
   "id": "openclaw_prometheus",
   "name": "openclaw_prometheus",
-  "version": "0.2.4",
+  "version": "0.2.6",
   "description": "Prometheus metrics exporter for OpenClaw Gateway - based on real Gateway RPC methods (health, sessions.list, channels.status, usage, presence, cron, models, nodes, skills)",
   "main": "dist/index.js",
   "channels": [],
@@ -29,6 +29,21 @@
         "type": "boolean",
         "default": true,
         "description": "Include Node.js runtime metrics"
+      },
+      "scrapeAuth": {
+        "type": "object",
+        "description": "Optional Bearer token check on /metrics routes (token via OPENCLAW_PROMETHEUS_BEARER_TOKEN recommended)",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Require Authorization: Bearer on metrics HTTP routes"
+          },
+          "bearerToken": {
+            "type": "string",
+            "description": "Dev-only token; production should use env OPENCLAW_PROMETHEUS_BEARER_TOKEN"
+          }
+        }
       }
     }
   },
@@ -47,6 +62,10 @@
     },
     "includeRuntime": {
       "label": "Include Runtime Metrics",
+      "type": "toggle"
+    },
+    "scrapeAuth.enabled": {
+      "label": "Scrape auth (Bearer)",
       "type": "toggle"
     }
   },

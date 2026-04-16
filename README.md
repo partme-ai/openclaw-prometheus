@@ -1,93 +1,138 @@
 <div align="center">
 
-# openclaw_prometheus
+# OpenClaw Prometheus
 
-**Prometheus metrics exporter — Gateway · Agent · Channel · Runtime · Memory**
+**OpenClaw plugin — Gateway RPC–backed Prometheus metrics and JSON inspection endpoints**
 
-![Version](https://img.shields.io/badge/Version-0.1.0-blue) ![License](https://img.shields.io/badge/License-MIT-green)
+![npm](https://img.shields.io/badge/npm-@partme.ai%2Fopenclaw__prometheus-blue)
+![Node](https://img.shields.io/badge/Node.js-20+-green)
+![License](https://img.shields.io/badge/License-MIT-green)
 
 </div>
 
-[中文](README_CN.md) | English
+[English](./README.md) | [简体中文](./README_CN.md)
 
----
+## Introduction
 
-## Features
+`@partme.ai/openclaw_prometheus` is a **non-channel** plugin for [OpenClaw](https://github.com/openclaw/openclaw). It uses [`definePluginEntry`](https://docs.openclaw.ai/plugins/sdk-entrypoints#definepluginentry) (see [Building plugins](https://docs.openclaw.ai/plugins/building-plugins)) to register HTTP routes on the Gateway. Collectors call documented Gateway RPC methods (`health`, `channels.status`, `sessions.list`, `usage.*`, `system-presence`, `cron.*`, `models.list`, `node.list`, `skills.*`) and expose the result as Prometheus text or JSON.
 
-- **Multi-dimensional metrics**: Gateway, Agent, Channel, Runtime, Memory
-- **Prometheus text format**: Standard `/metrics` endpoint for Prometheus scraping
-- **JSON format**: `/metrics/per-object` and `/metrics/detailed` for programmatic access
-- **Filtered queries**: Filter by metric family or agent ID
-- **Zero-config**: Works out of the box with sensible defaults
+## Core capabilities
+
+- **Multi-collector**: health, channels, sessions, usage, presence, cron, models, nodes, skills, and optional Node.js runtime (`openclaw_nodejs_*`).
+- **Endpoints**: Prometheus exposition on `{path}` (default `/metrics`), JSON on `{path}/per-object` and `{path}/detailed?family=`.
+- **Collection cache**: `collectIntervalMs` reuses the last successful scrape bundle to reduce RPC load under frequent Prometheus scrapes (set `0` to disable).
+- **Meta metrics**: `openclaw_exporter_build_info`, `openclaw_metrics_last_scrape_duration_seconds`.
+- **Optional scrape auth**: Bearer token via `OPENCLAW_PROMETHEUS_BEARER_TOKEN` (recommended) or dev-only `scrapeAuth.bearerToken` in config.
+- **Enterprise-style operations** (aligned with common Prometheus exporter practice and ideas from [RabbitMQ’s Prometheus guide](https://www.rabbitmq.com/docs/prometheus)): stable metric names, separate “full text” vs JSON drill-down, TLS termination at the Gateway/reverse proxy, and cardinality-aware use of `/detailed?family=`.
+
+### Plugin lifecycle
+
+- Loaded like any OpenClaw extension (`package.json` → `openclaw.extensions`).
+- `register()` wires `api.runtime` (for `gatewayCall` / `invoke` RPC) and `api.config`, then registers routes with `api.registerHttpRoute`.
+- Dedicated `port` in manifest is informational for operators; actual listen port follows the Gateway unless you front it with a separate listener in core.
 
 ## Endpoints
 
-| Endpoint | Format | Description |
-|----------|--------|-------------|
-| `GET /metrics` | Prometheus text | Standard Prometheus scrape target |
-| `GET /metrics/per-object` | JSON | Metrics grouped by object type |
-| `GET /metrics/detailed?family=&agent=` | JSON | Filtered metric queries |
+| Method & path | Format | Description |
+| --- | --- | --- |
+| `GET {path}` | Prometheus text | Scrape target (`Content-Type: text/plain; version=0.0.4`) |
+| `GET {path}/per-object` | JSON | Grouped metrics for tooling |
+| `GET {path}/detailed?family=` | JSON | Filter by substring of metric name |
 
-## Metric Families
+Default `{path}` is `/metrics`.
 
-- `openclaw_gateway_*` — Uptime, connections, sessions, message rates
-- `openclaw_agent_*` — Agent count, runs, errors, token usage
-- `openclaw_channel_*` — Channel count, connection status, message counts
-- `openclaw_nodejs_*` — Heap, RSS, event loop lag, handles
-- `openclaw_memory_*` — Memory index status
+## Metric families (prefixes)
 
-## Installation
+| Prefix | Source |
+| --- | --- |
+| `openclaw_*` | `health` RPC (gateway uptime, channels, agents, sessions) |
+| `openclaw_channel_*` | `channels.status` |
+| `openclaw_session_*` | `sessions.list` |
+| `openclaw_usage_*` | `usage.status` / `usage.cost` |
+| `openclaw_presence_*` | `system-presence` |
+| `openclaw_cron_*` | `cron.status` / `cron.list` |
+| `openclaw_model_*` | `models.list` |
+| `openclaw_node_*` | `node.list` |
+| `openclaw_skill_*` | `skills.status` / `skills.bins` |
+| `openclaw_nodejs_*` | Local process (optional via `includeRuntime`) |
+| `openclaw_exporter_*`, `openclaw_metrics_*` | Plugin meta |
+
+## Quick start
+
+### Prerequisites
+
+- OpenClaw `>= 2026.4.0`
+- Node.js `20+`
+
+### Install
 
 ```bash
-openclaw plugins install openclaw_prometheus
+openclaw plugins install @partme.ai/openclaw_prometheus
 ```
 
-## Configuration
+### Minimal config (`openclaw.json`)
 
-In `openclaw.plugin.json`:
-- `port`: Dedicated metrics port (default: 9090, 0 for Gateway port)
-- `path`: Metrics path (default: `/metrics`)
-- `collectIntervalMs`: Collection interval (default: 15000)
-- `includeRuntime`: Include Node.js runtime metrics (default: true)
-
-## Directory Structure
-
+```json
+{
+  "plugins": {
+    "entries": {
+      "openclaw_prometheus": {
+        "enabled": true,
+        "config": {
+          "path": "/metrics",
+          "collectIntervalMs": 15000,
+          "includeRuntime": true,
+          "scrapeAuth": {
+            "enabled": false
+          }
+        }
+      }
+    }
+  }
+}
 ```
-openclaw_prometheus/
-  package.json
-  openclaw.plugin.json
-  tsconfig.json
-  tsup.config.ts
-  src/
-    index.ts           # Plugin entry, registers HTTP routes
-    types.ts           # Metric types
-    collectors/        # Gateway, Agent, Runtime, Channel, Memory
-    formatters/        # Prometheus text, JSON
+
+### Prometheus scrape (with Bearer)
+
+```yaml
+scrape_configs:
+  - job_name: openclaw
+    scrape_interval: 15s
+    bearer_token_file: /etc/prometheus/openclaw-metrics.token
+    static_configs:
+      - targets: ["127.0.0.1:18789"]
+    metrics_path: /metrics
+```
+
+Set `scrapeAuth.enabled: true` and store the same secret in `OPENCLAW_PROMETHEUS_BEARER_TOKEN` on the Gateway host.
+
+### Manual probe (CLI)
+
+```bash
+pnpm run test:client -- http://127.0.0.1:18789/metrics
+OPENCLAW_PROMETHEUS_BEARER_TOKEN=secret pnpm run test:client -- http://127.0.0.1:18789/metrics
 ```
 
 ## Development
 
 ```bash
 pnpm install
-pnpm build
-pnpm dev   # watch mode
+pnpm run build
+pnpm dev
+pnpm test
 ```
 
-## Related OpenClaw plugins
+## Release version sync
 
-| Plugin | Description |
-|--------|--------------|
-| [openclaw_auth_oauth2](https://github.com/partme-ai/openclaw_auth_oauth2) | OAuth2 authentication |
-| [openclaw_cluster](https://github.com/partme-ai/openclaw_cluster) | Cluster coordination (discovery, config sync, session store, proxy) |
-| [openclaw_ics](https://github.com/partme-ai/openclaw_ics) | Intelligent Customer Service API |
-| [openclaw_management](https://github.com/partme-ai/openclaw_management) | Management REST API, Prometheus, definitions, Web UI |
-| [openclaw_mqtt](https://github.com/partme-ai/openclaw_mqtt) | MQTT protocol adapter |
-| [openclaw_prometheus](https://github.com/partme-ai/openclaw_prometheus) | Prometheus metrics exporter |
-| [openclaw_stomp](https://github.com/partme-ai/openclaw_stomp) | STOMP server |
-| [openclaw_tracing](https://github.com/partme-ai/openclaw_tracing) | Distributed tracing |
-| [openclaw_web_mqtt](https://github.com/partme-ai/openclaw_web_mqtt) | WebSocket MQTT |
-| [openclaw_web_stomp](https://github.com/partme-ai/openclaw_web_stomp) | WebSocket STOMP |
-| [openclaw_wecom_kf](https://github.com/partme-ai/openclaw_wecom_kf) | WeChat Work customer service channel |
+Bump **`package.json` `version`** and [`src/version.ts`](src/version.ts) **`PLUGIN_VERSION`** together before tagging.
+
+## Related plugins
+
+| Plugin | Role |
+| --- | --- |
+| [openclaw-mqtt](https://github.com/partme-ai/openclaw-mqtt) | MQTT channel bridge |
+| [openclaw-nacos](https://github.com/partme-ai/openclaw-nacos) | Nacos naming / config |
+| [openclaw-web-mqtt](https://github.com/partme-ai/openclaw-web-mqtt) | Web MQTT helpers |
 
 ## License
 

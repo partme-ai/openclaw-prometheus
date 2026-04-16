@@ -1,0 +1,201 @@
+# Build release package and publish on version tags (v*).
+# Dual publish: npmjs (`@partme.ai/*`) + GitHub Packages (`@<github-owner>/*`), then create a GitHub Release.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: release-npm-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          scope: "@partme.ai"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Test
+        run: pnpm test
+
+      - name: Pack npm tarball
+        run: npm pack --silent
+
+      - name: Upload release package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openclaw-prometheus-release-${{ github.sha }}
+          path: "*.tgz"
+          if-no-files-found: error
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          scope: "@partme.ai"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Test
+        run: pnpm test
+
+      - name: Publish to npm (skip existing version)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          PKG=$(node -p "require('./package.json').name")
+          SPEC="${PKG}@${VERSION}"
+
+          if npm view "${SPEC}" version >/dev/null 2>&1; then
+            echo "::notice::${SPEC} already exists, skip publish."
+            exit 0
+          fi
+
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "::error::NPM_TOKEN is not set."
+            exit 1
+          fi
+
+          npm whoami --registry https://registry.npmjs.org/
+          npm publish --access public --registry https://registry.npmjs.org/
+          echo "::notice::Published ${SPEC}."
+
+      - name: Setup Node.js for GitHub Packages
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@${{ github.repository_owner }}"
+
+      # GitHub npm registry requires scope == repository owner. We publish the same tarball
+      # under @${owner}/<basename> (e.g. @partme-ai/openclaw-prometheus) while npmjs keeps @partme.ai/*.
+      - name: Publish to GitHub Packages
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+
+          OWNER_LC="$(echo "${OWNER}" | tr '[:upper:]' '[:lower:]')"
+          ORIG_PKG=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          case "${ORIG_PKG}" in
+            @*/*) ;;
+            *)
+              echo "::error::Expected scoped package name, got: ${ORIG_PKG}"
+              exit 1
+              ;;
+          esac
+          BASE="${ORIG_PKG##*/}"
+          GH_PKG="@${OWNER_LC}/${BASE}"
+          REG="https://npm.pkg.github.com"
+          SPEC="${GH_PKG}@${VERSION}"
+
+          if npm view "${SPEC}" version --registry "${REG}" >/dev/null 2>&1; then
+            echo "::notice::${SPEC} already exists on GitHub Packages, skip."
+            exit 0
+          fi
+
+          cp -a package.json package.json.orig
+          restore_pkg() {
+            if [ -f package.json.orig ]; then
+              mv -f package.json.orig package.json
+            fi
+          }
+          trap restore_pkg EXIT
+
+          if [ "${ORIG_PKG}" != "${GH_PKG}" ]; then
+            echo "::notice::GitHub Packages publish as ${GH_PKG} (npmjs remains ${ORIG_PKG})."
+            node -e "const fs=require('fs');const n=process.argv[1];const j=JSON.parse(fs.readFileSync('package.json','utf8'));j.name=n;fs.writeFileSync('package.json',JSON.stringify(j,null,2)+'\n');" "${GH_PKG}"
+          fi
+
+          npm whoami --registry "${REG}"
+
+          set +e
+          npm publish --registry "${REG}" --access public 2>&1 | tee publish-gh.log
+          PUBLISH_EXIT=${PIPESTATUS[0]}
+          set -e
+
+          if [ "${PUBLISH_EXIT}" -eq 0 ]; then
+            echo "::notice::Published ${SPEC} to GitHub Packages."
+            restore_pkg
+            trap - EXIT
+            exit 0
+          fi
+
+          if grep -Eqi 'cannot publish over the previously published versions|You cannot publish over the previously published versions|code E409|409 Conflict|already exists' publish-gh.log; then
+            echo "::notice::${SPEC} appears already published on GitHub Packages (detected from publish output), treating as skip."
+            restore_pkg
+            trap - EXIT
+            exit 0
+          fi
+
+          echo "::error::npm publish to GitHub Packages failed (exit ${PUBLISH_EXIT})."
+          exit "${PUBLISH_EXIT}"
+
+      - name: Pack release artifact
+        run: npm pack --silent
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF#refs/tags/}"
+          gh release create "${TAG}" ./*.tgz \
+            --title "${TAG}" \
+            --generate-notes
