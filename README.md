@@ -48,7 +48,8 @@ Default `{path}` is `/metrics`.
 | `openclaw_*` | `health` RPC (gateway uptime, channels, agents, sessions) |
 | `openclaw_channel_*` | `channels.status` |
 | `openclaw_session_*` | `sessions.list` |
-| `openclaw_usage_*` | `usage.status` / `usage.cost` |
+| `openclaw_usage_*` | `usage.cost` → `totals`（时间窗全局汇总，无 provider） |
+| `openclaw_usage_provider_*{provider=""}` | `sessions.usage` → `aggregates.byProvider`（按**模型供应商**拆分的 token / 费用） |
 | `openclaw_presence_*` | `system-presence` |
 | `openclaw_cron_*` | `cron.status` / `cron.list` |
 | `openclaw_model_*` | `models.list` |
