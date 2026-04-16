@@ -135,15 +135,14 @@ Bump **`package.json` `version`** and [`src/version.ts`](src/version.ts) **`PLUG
 
 | Plugin | Description |
 | --- | --- |
-| [openclaw_auth_oauth2](https://github.com/partme-ai/openclaw_auth_oauth2) | OAuth2 authentication |
-| [openclaw_cluster](https://github.com/partme-ai/openclaw_cluster) | Cluster coordination (discovery, config sync, session store, proxy) |
-| [openclaw_management](https://github.com/partme-ai/openclaw_management) | Management REST API, Prometheus, definitions, Web UI |
-| [openclaw_mqtt](https://github.com/partme-ai/openclaw_mqtt) | MQTT protocol adapter |
+| [openclaw-oauth2](https://github.com/partme-ai/openclaw-oauth2) | OAuth2 authentication |
+| [openclaw-mqtt](https://github.com/partme-ai/openclaw-mqtt) | MQTT protocol adapter |
+| [openclaw-stomp](https://github.com/partme-ai/openclaw-stomp) | STOMP server |
+| [openclaw-web-mqtt](https://github.com/partme-ai/openclaw-web-mqtt) | WebSocket MQTT |
+| [openclaw-web-stomp](https://github.com/partme-ai/openclaw-web-stomp) | WebSocket STOMP |
+| [openclaw-tracing](https://github.com/partme-ai/openclaw-tracing) | Distributed tracing |
+| [openclaw-prometheus](https://github.com/partme-ai/openclaw-prometheus) | Prometheus metrics |
 | [openclaw-nacos](https://github.com/partme-ai/openclaw-nacos) | Nacos naming / config |
-| [openclaw_stomp](https://github.com/partme-ai/openclaw_stomp) | STOMP server |
-| [openclaw_tracing](https://github.com/partme-ai/openclaw_tracing) | Distributed tracing |
-| [openclaw_web_mqtt](https://github.com/partme-ai/openclaw_web_mqtt) | WebSocket MQTT |
-| [openclaw_web_stomp](https://github.com/partme-ai/openclaw_web_stomp) | WebSocket STOMP |
 
 ## License
 

@@ -125,15 +125,14 @@ pnpm test
 
 | 插件 | 说明 |
 | --- | --- |
-| [openclaw_auth_oauth2](https://github.com/partme-ai/openclaw_auth_oauth2) | OAuth2 认证 |
-| [openclaw_cluster](https://github.com/partme-ai/openclaw_cluster) | 集群协调（发现 / 配置同步 / 会话存储 / 代理） |
-| [openclaw_management](https://github.com/partme-ai/openclaw_management) | 管理 REST API + Prometheus + 定义导出/导入 + Web UI |
-| [openclaw_mqtt](https://github.com/partme-ai/openclaw_mqtt) | MQTT 协议接入 |
+| [openclaw-oauth2](https://github.com/partme-ai/openclaw-oauth2) | OAuth2 认证 |
+| [openclaw-mqtt](https://github.com/partme-ai/openclaw-mqtt) | MQTT 协议接入 |
+| [openclaw-stomp](https://github.com/partme-ai/openclaw-stomp) | STOMP 服务端 |
+| [openclaw-web-mqtt](https://github.com/partme-ai/openclaw-web-mqtt) | WebSocket MQTT |
+| [openclaw-web-stomp](https://github.com/partme-ai/openclaw-web-stomp) | WebSocket STOMP |
+| [openclaw-tracing](https://github.com/partme-ai/openclaw-tracing) | 链路追踪 |
+| [openclaw-prometheus](https://github.com/partme-ai/openclaw-prometheus) | Prometheus 指标 |
 | [openclaw-nacos](https://github.com/partme-ai/openclaw-nacos) | Nacos 注册/配置 |
-| [openclaw_stomp](https://github.com/partme-ai/openclaw_stomp) | STOMP 服务端 |
-| [openclaw_tracing](https://github.com/partme-ai/openclaw_tracing) | 链路追踪 |
-| [openclaw_web_mqtt](https://github.com/partme-ai/openclaw_web_mqtt) | WebSocket MQTT |
-| [openclaw_web_stomp](https://github.com/partme-ai/openclaw_web_stomp) | WebSocket STOMP |
 
 ## 许可证
 
