@@ -1,6 +1,5 @@
-# Build release package and publish on version tags (v*).
-# Dual publish: npmjs (`@partme.ai/*`) + GitHub Packages (`@<github-owner>/*`), then create a GitHub Release.
-# Aligned with openclaw-web-mqtt/.github/workflows/release.yml (artifact / comment names only).
+# Build release tarball and publish on version tags (v*).
+# Publishes to npmjs (@partme.ai scope) and GitHub Packages, then creates a GitHub Release.
 name: Release
 
 on:
@@ -41,13 +40,23 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck
-        run: pnpm run typecheck
+        run: |
+          if node -e "const p=require('./package.json'); process.exit(p.scripts&&p.scripts.typecheck?0:1)"; then
+            pnpm run typecheck
+          else
+            echo "::notice::No typecheck script; skipping."
+          fi
 
       - name: Build
         run: pnpm run build
 
       - name: Test
-        run: pnpm test
+        run: |
+          if node -e "const p=require('./package.json'); process.exit(p.scripts&&p.scripts.test?0:1)"; then
+            pnpm test
+          else
+            echo "::notice::No test script; skipping."
+          fi
 
       - name: Pack npm tarball
         run: npm pack --silent
@@ -67,12 +76,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Private package gate
+        id: gate
+        run: |
+          node -e "const p=require('./package.json');const v=String(p.private===true);require('fs').appendFileSync(process.env.GITHUB_OUTPUT,'private='+v+'\n');"
+
       - name: Setup pnpm
+        if: steps.gate.outputs.private != 'true'
         uses: pnpm/action-setup@v4
         with:
           version: 10
 
       - name: Setup Node.js
+        if: steps.gate.outputs.private != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -81,18 +97,33 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
+        if: steps.gate.outputs.private != 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck
-        run: pnpm run typecheck
+        if: steps.gate.outputs.private != 'true'
+        run: |
+          if node -e "const p=require('./package.json'); process.exit(p.scripts&&p.scripts.typecheck?0:1)"; then
+            pnpm run typecheck
+          else
+            echo "::notice::No typecheck script; skipping."
+          fi
 
       - name: Build
+        if: steps.gate.outputs.private != 'true'
         run: pnpm run build
 
       - name: Test
-        run: pnpm test
+        if: steps.gate.outputs.private != 'true'
+        run: |
+          if node -e "const p=require('./package.json'); process.exit(p.scripts&&p.scripts.test?0:1)"; then
+            pnpm test
+          else
+            echo "::notice::No test script; skipping."
+          fi
 
       - name: Publish to npm (skip existing version)
+        if: steps.gate.outputs.private != 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
@@ -116,15 +147,15 @@ jobs:
           echo "::notice::Published ${SPEC}."
 
       - name: Setup Node.js for GitHub Packages
+        if: steps.gate.outputs.private != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "22"
           registry-url: "https://npm.pkg.github.com"
           scope: "@${{ github.repository_owner }}"
 
-      # GitHub npm registry requires scope == repository owner. We publish the same tarball
-      # under @${owner}/<basename> (e.g. @partme-ai/openclaw-prometheus) while npmjs keeps @partme.ai/*.
       - name: Publish to GitHub Packages
+        if: steps.gate.outputs.private != 'true'
         env:
           NODE_AUTH_TOKEN: ${{ github.token }}
           OWNER: ${{ github.repository_owner }}
@@ -160,7 +191,7 @@ jobs:
           trap restore_pkg EXIT
 
           if [ "${ORIG_PKG}" != "${GH_PKG}" ]; then
-            echo "::notice::GitHub Packages publish as ${GH_PKG} (npmjs remains ${ORIG_PKG})."
+            echo "::notice::GitHub Packages publish as ${GH_PKG} (npmjs scope unchanged)."
             node -e "const fs=require('fs');const n=process.argv[1];const j=JSON.parse(fs.readFileSync('package.json','utf8'));j.name=n;fs.writeFileSync('package.json',JSON.stringify(j,null,2)+'\n');" "${GH_PKG}"
           fi
 
@@ -189,9 +220,11 @@ jobs:
           exit "${PUBLISH_EXIT}"
 
       - name: Pack release artifact
+        if: steps.gate.outputs.private != 'true'
         run: npm pack --silent
 
       - name: Create GitHub Release
+        if: steps.gate.outputs.private != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -200,3 +233,7 @@ jobs:
           gh release create "${TAG}" ./*.tgz \
             --title "${TAG}" \
             --generate-notes
+
+      - name: Private package notice
+        if: steps.gate.outputs.private == 'true'
+        run: echo "::notice::package.json has private=true; skipped npm/GitHub publish and GitHub Release."

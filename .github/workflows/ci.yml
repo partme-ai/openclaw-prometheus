@@ -1,13 +1,11 @@
 # Continuous integration: install, typecheck, build, test, upload dist artifact.
-# Aligned with openclaw-web-mqtt/.github/workflows/ci.yml (project-specific artifact name only).
 name: CI
 
 on:
   push:
-    branches: [main, master, "release/**"]
+    branches: [main, master]
   pull_request:
     branches: [main, master]
-  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -34,13 +32,23 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck
-        run: pnpm run typecheck
+        run: |
+          if node -e "const p=require('./package.json'); process.exit(p.scripts&&p.scripts.typecheck?0:1)"; then
+            pnpm run typecheck
+          else
+            echo "::notice::No typecheck script; skipping."
+          fi
 
       - name: Build
         run: pnpm run build
 
       - name: Test
-        run: pnpm test
+        run: |
+          if node -e "const p=require('./package.json'); process.exit(p.scripts&&p.scripts.test?0:1)"; then
+            pnpm test
+          else
+            echo "::notice::No test script; skipping."
+          fi
 
       - name: Upload build artifact (dist)
         uses: actions/upload-artifact@v4
