@@ -63,6 +63,7 @@ gen_code
 
 ### node ###
 node_modules
+*.tgz
 pom.xml.versionsBackup
 /server/nacos-server/data
 /server/nacos-server/logs
