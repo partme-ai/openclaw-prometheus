@@ -1,16 +1,35 @@
 declare module "openclaw/plugin-sdk/core" {
+  /** 与 OpenClaw Gateway `PluginHookName` 对齐（见源码 `plugins/hook-types.ts`） */
   type PluginHookName =
+    | "before_model_resolve"
+    | "before_prompt_build"
     | "before_agent_start"
+    | "before_agent_reply"
+    | "llm_input"
     | "llm_output"
     | "agent_end"
+    | "before_compaction"
+    | "after_compaction"
+    | "before_reset"
+    | "inbound_claim"
     | "message_received"
+    | "message_sending"
     | "message_sent"
     | "before_tool_call"
     | "after_tool_call"
+    | "tool_result_persist"
+    | "before_message_write"
     | "session_start"
     | "session_end"
+    | "subagent_spawning"
+    | "subagent_delivery_target"
+    | "subagent_spawned"
+    | "subagent_ended"
     | "gateway_start"
-    | "gateway_stop";
+    | "gateway_stop"
+    | "before_dispatch"
+    | "reply_dispatch"
+    | "before_install";
 
   type PluginHookContext = Record<string, unknown>;
   type PluginHookHandler = (event: any, ctx: PluginHookContext) => void | Promise<void>;

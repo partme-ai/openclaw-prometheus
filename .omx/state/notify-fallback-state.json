@@ -1,7 +1,7 @@
 {
-  "pid": 2455670,
+  "pid": 2534051,
   "parent_pid": 1300741,
-  "started_at": "2026-04-19T15:00:11.904Z",
+  "started_at": "2026-04-19T15:29:44.837Z",
   "cwd": "/home/wandl/workspaces/workspace-partme-ai/openclaw-plugins/openclaw-prometheus",
   "notify_script": "/home/wandl/.config/nvm/versions/node/v24.14.1/lib/node_modules/oh-my-codex/dist/scripts/notify-hook.js",
   "authority_only": true,
@@ -17,7 +17,7 @@
     "max_per_tick": 5,
     "run_count": 1,
     "leader_only": true,
-    "last_tick_at": "2026-04-19T15:00:11.907Z",
+    "last_tick_at": "2026-04-19T15:29:44.844Z",
     "last_result": {
       "processed": 0,
       "skipped": 0,
@@ -30,7 +30,7 @@
     "leader_only": true,
     "stale_threshold_ms": 180000,
     "precomputed_leader_stale": true,
-    "last_tick_at": "2026-04-19T15:00:11.910Z",
+    "last_tick_at": "2026-04-19T15:29:44.846Z",
     "last_error": null,
     "run_count": 1
   },
@@ -57,7 +57,7 @@
   "fallback_auto_nudge": {
     "enabled": true,
     "stall_ms": 5000,
-    "last_tick_at": "2026-04-19T15:00:11.939Z",
+    "last_tick_at": "2026-04-19T15:29:44.895Z",
     "last_turn_at": "2026-04-19T10:02:46.482Z",
     "last_turn_count": 0,
     "last_message": "",
@@ -80,8 +80,8 @@
     "max_ms": 1000,
     "current_ms": 75,
     "idle_streak": 0,
-    "last_tick_at": "2026-04-19T15:00:11.939Z",
-    "last_activity_at": "2026-04-19T15:00:11.939Z",
+    "last_tick_at": "2026-04-19T15:29:44.896Z",
+    "last_activity_at": "2026-04-19T15:29:44.896Z",
     "last_activity_reason": "leader_nudge"
   },
   "last_cycle_activity": "leader_nudge"

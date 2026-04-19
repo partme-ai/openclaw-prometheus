@@ -108,10 +108,13 @@ describe("prometheusPlugin register", () => {
         {
           provider: "openai",
           model: "gpt-5",
-          usage: { input: 10, output: 5, total: 15 },
+          usage: { input: 10, output: 5, total: 15, cacheRead: 4, cacheWrite: 1 },
         },
         { agentId: "agent-main" },
       );
+    }
+    for (const handler of hookHandlers.get("before_model_resolve") ?? []) {
+      await handler({}, {});
     }
     for (const handler of hookHandlers.get("agent_end") ?? []) {
       await handler({ success: true, durationMs: 800, messages: [] }, { agentId: "agent-main" });
@@ -152,5 +155,7 @@ describe("prometheusPlugin register", () => {
     expect(body).toContain("openclaw_messages_received_total{channel=\"discord\"} 1");
     expect(body).toContain("openclaw_tool_calls_total{tool=\"web_search\"} 1");
     expect(body).toContain("openclaw_agent_events_total{stream=\"item\"} 1");
+    expect(body).toContain("openclaw_usage_tokens_cache_read_total");
+    expect(body).toContain("openclaw_plugin_hook_invocations_total{hook=\"before_model_resolve\"} 1");
   });
 });

@@ -10,6 +10,7 @@ export function registerPluginObservers(api: OpenClawPluginApi): void {
   registerToolHooks(api);
   registerAgentHooks(api);
   registerRuntimeEventListeners(api);
+  registerSupplementaryPluginHooks(api);
 }
 
 function registerLifecycleHooks(api: OpenClawPluginApi): void {
@@ -170,6 +171,22 @@ function registerAgentHooks(api: OpenClawPluginApi): void {
       type: "counter",
       labels,
     });
+    const cacheRead = event.usage?.cacheRead ?? 0;
+    const cacheWrite = event.usage?.cacheWrite ?? 0;
+    if (cacheRead > 0) {
+      registry.inc("openclaw_usage_tokens_cache_read_total", cacheRead, {
+        help: "Cache read tokens observed through llm_output hooks",
+        type: "counter",
+        labels,
+      });
+    }
+    if (cacheWrite > 0) {
+      registry.inc("openclaw_usage_tokens_cache_write_total", cacheWrite, {
+        help: "Cache write tokens observed through llm_output hooks",
+        type: "counter",
+        labels,
+      });
+    }
     registry.inc(
       "openclaw_usage_tokens_total",
       event.usage?.total ??
@@ -251,6 +268,167 @@ function registerRuntimeEventListeners(api: OpenClawPluginApi): void {
   });
 }
 
+/**
+ * 将 before_reset 等原因归一为低基数标签。
+ *
+ * @param reason - hook 事件中的 reason 字段
+ */
+function normalizeSessionResetReason(reason: unknown): string {
+  if (typeof reason !== "string") {
+    return "unknown";
+  }
+  const trimmed = reason.trim();
+  if (
+    trimmed === "new" ||
+    trimmed === "reset" ||
+    trimmed === "idle" ||
+    trimmed === "daily" ||
+    trimmed === "compaction" ||
+    trimmed === "deleted"
+  ) {
+    return trimmed;
+  }
+  return trimmed.length > 0 ? "other" : "unknown";
+}
+
+/**
+ * 递增通用 hook 调用计数（补充尚未在其它 register* 中单独建模的 SDK hooks）。
+ *
+ * @param hook - OpenClaw `PluginHookName`
+ */
+function incHookInvocation(hook: string): void {
+  const { registry } = getRuntimeStore();
+  registry.inc("openclaw_plugin_hook_invocations_total", 1, {
+    help: "Plugin SDK hook invocations observed by openclaw-prometheus",
+    type: "counter",
+    labels: { hook },
+  });
+}
+
+/**
+ * 补充注册 OpenClaw 其余 Plugin SDK hooks（模型解析、压缩、子代理、派发、安装等）。
+ */
+function registerSupplementaryPluginHooks(api: OpenClawPluginApi): void {
+  api.on("before_model_resolve", () => {
+    incHookInvocation("before_model_resolve");
+  });
+  api.on("before_prompt_build", () => {
+    incHookInvocation("before_prompt_build");
+  });
+  api.on("before_agent_reply", () => {
+    incHookInvocation("before_agent_reply");
+  });
+  api.on("llm_input", (event) => {
+    incHookInvocation("llm_input");
+    const { registry } = getRuntimeStore();
+    const provider = typeof event?.provider === "string" ? event.provider : "unknown";
+    const model = typeof event?.model === "string" ? event.model : "unknown";
+    const images =
+      typeof event?.imagesCount === "number" && event.imagesCount > 0 ? event.imagesCount : 0;
+    if (images > 0) {
+      registry.inc("openclaw_llm_input_images_total", images, {
+        help: "Images attached to LLM inputs observed through llm_input hooks",
+        type: "counter",
+        labels: { provider, model },
+      });
+    }
+  });
+  api.on("before_compaction", (event) => {
+    incHookInvocation("before_compaction");
+    const { registry } = getRuntimeStore();
+    registry.inc("openclaw_session_compaction_events_total", 1, {
+      help: "Session compaction-related hook events",
+      type: "counter",
+      labels: { phase: "before" },
+    });
+    const tokenCount = typeof event?.tokenCount === "number" ? event.tokenCount : undefined;
+    if (typeof tokenCount === "number") {
+      registry.set("openclaw_session_compaction_last_tokens_before", tokenCount, {
+        help: "Token count observed on the last before_compaction hook",
+      });
+    }
+  });
+  api.on("after_compaction", (event) => {
+    incHookInvocation("after_compaction");
+    const { registry } = getRuntimeStore();
+    registry.inc("openclaw_session_compaction_events_total", 1, {
+      help: "Session compaction-related hook events",
+      type: "counter",
+      labels: { phase: "after" },
+    });
+    const compacted = typeof event?.compactedCount === "number" ? event.compactedCount : 0;
+    if (compacted > 0) {
+      registry.inc("openclaw_session_compaction_messages_compacted_total", compacted, {
+        help: "Messages removed by compaction (after_compaction.compactedCount)",
+        type: "counter",
+      });
+    }
+    const tokenCountAfter = typeof event?.tokenCount === "number" ? event.tokenCount : undefined;
+    if (typeof tokenCountAfter === "number") {
+      registry.set("openclaw_session_compaction_last_tokens_after", tokenCountAfter, {
+        help: "Token count observed on the last after_compaction hook",
+      });
+    }
+  });
+  api.on("before_reset", (event) => {
+    incHookInvocation("before_reset");
+    const { registry } = getRuntimeStore();
+    const reason = normalizeSessionResetReason(event?.reason);
+    registry.inc("openclaw_session_reset_requests_total", 1, {
+      help: "Session reset requests observed through before_reset hooks",
+      type: "counter",
+      labels: { reason },
+    });
+  });
+  api.on("inbound_claim", () => {
+    incHookInvocation("inbound_claim");
+  });
+  api.on("message_sending", () => {
+    incHookInvocation("message_sending");
+  });
+  api.on("tool_result_persist", (event) => {
+    incHookInvocation("tool_result_persist");
+    const tool = typeof event?.toolName === "string" ? event.toolName : "unknown";
+    const { registry } = getRuntimeStore();
+    registry.inc("openclaw_tool_result_persist_total", 1, {
+      help: "Tool results persisted (tool_result_persist hook)",
+      type: "counter",
+      labels: { tool },
+    });
+  });
+  api.on("before_message_write", () => {
+    incHookInvocation("before_message_write");
+  });
+  api.on("subagent_spawning", () => {
+    incHookInvocation("subagent_spawning");
+  });
+  api.on("subagent_delivery_target", () => {
+    incHookInvocation("subagent_delivery_target");
+  });
+  api.on("subagent_spawned", () => {
+    incHookInvocation("subagent_spawned");
+  });
+  api.on("subagent_ended", (event) => {
+    incHookInvocation("subagent_ended");
+    const { registry } = getRuntimeStore();
+    const outcome = typeof event?.outcome === "string" ? event.outcome : "unknown";
+    registry.inc("openclaw_subagent_ended_total", 1, {
+      help: "Subagent ended events by outcome",
+      type: "counter",
+      labels: { outcome },
+    });
+  });
+  api.on("before_dispatch", () => {
+    incHookInvocation("before_dispatch");
+  });
+  api.on("reply_dispatch", () => {
+    incHookInvocation("reply_dispatch");
+  });
+  api.on("before_install", () => {
+    incHookInvocation("before_install");
+  });
+}
+
 export async function refreshRuntimeSnapshots(force = false): Promise<void> {
   const store = getRuntimeStore();
   const now = Date.now();
@@ -303,6 +481,13 @@ export async function refreshRuntimeSnapshots(force = false): Promise<void> {
   });
 
   for (const snapshot of providerSnapshots) {
+    if (snapshot.status === "error") {
+      registry.inc("openclaw_model_auth_provider_probe_errors_total", 1, {
+        help: "Errors while probing provider API keys during runtime snapshot refresh",
+        type: "counter",
+        labels: { provider: snapshot.provider },
+      });
+    }
     registry.setOneHotStatus(
       "openclaw_model_auth_provider_status",
       snapshot.status,

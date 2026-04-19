@@ -9,7 +9,7 @@ const PREFIX = "openclaw_nodejs";
 
 /**
  * 运行时采集器
- * 采集 Node.js 进程级别的资源使用指标
+ * 采集 Node.js 进程级别的资源使用指标（堆、RSS、`arrayBuffers`、事件环延迟、累计 CPU 时间）。
  */
 export class RuntimeCollector implements MetricCollector {
   name = "runtime";
@@ -18,9 +18,24 @@ export class RuntimeCollector implements MetricCollector {
     { name: `${PREFIX}_heap_used_bytes`, help: "Node.js heap used in bytes", type: "gauge" },
     { name: `${PREFIX}_heap_total_bytes`, help: "Node.js heap total in bytes", type: "gauge" },
     { name: `${PREFIX}_external_bytes`, help: "Node.js external memory in bytes", type: "gauge" },
+    {
+      name: `${PREFIX}_array_buffers_bytes`,
+      help: "Node.js memoryUsage.arrayBuffers (if available)",
+      type: "gauge",
+    },
     { name: `${PREFIX}_rss_bytes`, help: "Resident set size in bytes", type: "gauge" },
     { name: `${PREFIX}_event_loop_lag_ms`, help: "Event loop lag in milliseconds", type: "gauge" },
     { name: `${PREFIX}_uptime_seconds`, help: "Node.js process uptime", type: "gauge" },
+    {
+      name: `${PREFIX}_process_cpu_user_seconds_total`,
+      help: "Cumulative CPU user time for this process (seconds)",
+      type: "counter",
+    },
+    {
+      name: `${PREFIX}_process_cpu_system_seconds_total`,
+      help: "Cumulative CPU system time for this process (seconds)",
+      type: "counter",
+    },
   ];
 
   /** 事件循环延迟测量值 */
@@ -51,18 +66,24 @@ export class RuntimeCollector implements MetricCollector {
   }
 
   /**
-   * 采集运行时指标
+   * 采集运行时指标：内存与 `process.cpuUsage()` 的累计用户/系统时间（秒）。
    */
   async collect(): Promise<MetricSample[]> {
     const mem = process.memoryUsage();
+    const cpu = process.cpuUsage();
+    const arrayBuffers =
+      typeof mem.arrayBuffers === "number" && Number.isFinite(mem.arrayBuffers) ? mem.arrayBuffers : 0;
 
     return [
       { name: `${PREFIX}_heap_used_bytes`, value: mem.heapUsed },
       { name: `${PREFIX}_heap_total_bytes`, value: mem.heapTotal },
       { name: `${PREFIX}_external_bytes`, value: mem.external },
+      { name: `${PREFIX}_array_buffers_bytes`, value: arrayBuffers },
       { name: `${PREFIX}_rss_bytes`, value: mem.rss },
       { name: `${PREFIX}_event_loop_lag_ms`, value: this.eventLoopLag },
       { name: `${PREFIX}_uptime_seconds`, value: process.uptime() },
+      { name: `${PREFIX}_process_cpu_user_seconds_total`, value: cpu.user / 1e6 },
+      { name: `${PREFIX}_process_cpu_system_seconds_total`, value: cpu.system / 1e6 },
     ];
   }
 }

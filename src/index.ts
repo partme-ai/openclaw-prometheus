@@ -279,6 +279,11 @@ function registerMetricsRoutes(api: OpenClawPluginApi): void {
       "openclaw.prometheus.status",
       async (_req, res) => {
         const store = getRuntimeStore();
+        store.registry.inc("openclaw_gateway_operator_rpc_requests_total", 1, {
+          help: "Gateway operator RPC invocations handled by openclaw-prometheus",
+          type: "counter",
+          labels: { method: "openclaw.prometheus.status" },
+        });
         res.respond(true, {
           ok: true,
           plugin: PLUGIN_ID,
