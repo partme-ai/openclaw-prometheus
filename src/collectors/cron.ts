@@ -29,7 +29,10 @@ export class CronCollector implements MetricCollector {
     { name: `${PREFIX}_jobs_total`, help: "Total registered cron jobs", type: "gauge" },
     { name: `${PREFIX}_jobs_enabled`, help: "Enabled cron jobs", type: "gauge" },
     { name: `${PREFIX}_jobs_disabled`, help: "Disabled cron jobs", type: "gauge" },
+    { name: `${PREFIX}_jobs_errors_total`, help: "Cron jobs whose last run failed", type: "gauge" },
+    { name: `${PREFIX}_jobs_running_total`, help: "Cron jobs currently running", type: "gauge" },
     { name: `${PREFIX}_next_wake_in_seconds`, help: "Seconds until next cron wake", type: "gauge" },
+    { name: `${PREFIX}_next_run_in_seconds`, help: "Soonest next run among listed cron jobs", type: "gauge" },
   ];
 
   /**
@@ -37,45 +40,78 @@ export class CronCollector implements MetricCollector {
    * 并行调用 cron.status 和 cron.list
    */
   async collect(): Promise<MetricSample[]> {
+    const [status, listResult] = await Promise.all([
+      rpcCall<CronStatus>("cron.status"),
+      rpcCall<unknown>("cron.list"),
+    ]);
     const samples: MetricSample[] = [];
 
-    try {
-      const [status, listResult] = await Promise.all([
-        rpcCall<CronStatus>("cron.status").catch(() => ({} as CronStatus)),
-        rpcCall<unknown>("cron.list").catch(() => []),
-      ]);
+    samples.push({
+      name: `${PREFIX}_scheduler_enabled`,
+      value: status.enabled !== undefined ? (status.enabled ? 1 : 0) : 1,
+    });
 
-      // 调度器状态
+    const jobs = normalizeJobs(listResult);
+    const totalJobs =
+      typeof (listResult as { total?: unknown })?.total === "number"
+        ? ((listResult as { total: number }).total)
+        : status.jobCount ?? jobs.length;
+    const enabledJobs = jobs.filter((j) => j.enabled !== false).length;
+    const runningJobs = jobs.filter((j) => {
+      const state = j.state as Record<string, unknown> | undefined;
+      return state?.running === true;
+    }).length;
+    const erroredJobs = jobs.filter((j) => {
+      const state = j.state as Record<string, unknown> | undefined;
+      return (
+        state?.lastRunStatus === "error" ||
+        state?.lastStatus === "error" ||
+        typeof state?.consecutiveErrors === "number" && state.consecutiveErrors > 0
+      );
+    }).length;
+
+    samples.push({ name: `${PREFIX}_jobs_total`, value: totalJobs });
+    samples.push({ name: `${PREFIX}_jobs_enabled`, value: enabledJobs });
+    samples.push({ name: `${PREFIX}_jobs_disabled`, value: Math.max(totalJobs - enabledJobs, 0) });
+    samples.push({ name: `${PREFIX}_jobs_errors_total`, value: erroredJobs });
+    samples.push({ name: `${PREFIX}_jobs_running_total`, value: runningJobs });
+
+    const nextWakeAt = numberLike((status as Record<string, unknown>).nextWakeAtMs)
+      || numberLike((status as Record<string, unknown>).nextWakeTime);
+    if (nextWakeAt > 0) {
       samples.push({
-        name: `${PREFIX}_scheduler_enabled`,
-        value: status.enabled !== undefined ? (status.enabled ? 1 : 0) : 1,
+        name: `${PREFIX}_next_wake_in_seconds`,
+        value: Math.max(0, Math.round((nextWakeAt - Date.now()) / 1000)),
       });
+    }
 
-      // 任务列表
-      let jobs: CronJob[] = [];
-      if (Array.isArray(listResult)) {
-        jobs = listResult;
-      } else if (listResult && typeof listResult === "object") {
-        const obj = listResult as Record<string, unknown>;
-        if (Array.isArray(obj.jobs)) jobs = obj.jobs;
-      }
-
-      const totalJobs = status.jobCount ?? jobs.length;
-      const enabledJobs = jobs.filter((j) => j.enabled !== false).length;
-
-      samples.push({ name: `${PREFIX}_jobs_total`, value: totalJobs });
-      samples.push({ name: `${PREFIX}_jobs_enabled`, value: enabledJobs });
-      samples.push({ name: `${PREFIX}_jobs_disabled`, value: totalJobs - enabledJobs });
-
-      // 下次唤醒
-      if (status.nextWakeTime && status.nextWakeTime > 0) {
-        const secondsUntil = Math.max(0, Math.round((status.nextWakeTime - Date.now()) / 1000));
-        samples.push({ name: `${PREFIX}_next_wake_in_seconds`, value: secondsUntil });
-      }
-    } catch {
-      samples.push({ name: `${PREFIX}_jobs_total`, value: 0 });
+    const nextRuns = jobs
+      .map((job) => numberLike((job as Record<string, unknown>).nextRunAtMs) || numberLike((job as Record<string, unknown>).nextRunAt))
+      .filter((value) => value > 0);
+    if (nextRuns.length > 0) {
+      samples.push({
+        name: `${PREFIX}_next_run_in_seconds`,
+        value: Math.max(0, Math.round((Math.min(...nextRuns) - Date.now()) / 1000)),
+      });
     }
 
     return samples;
   }
+}
+
+function normalizeJobs(listResult: unknown): CronJob[] {
+  if (Array.isArray(listResult)) {
+    return listResult as CronJob[];
+  }
+  if (listResult && typeof listResult === "object") {
+    const obj = listResult as Record<string, unknown>;
+    if (Array.isArray(obj.jobs)) {
+      return obj.jobs as CronJob[];
+    }
+  }
+  return [];
+}
+
+function numberLike(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }

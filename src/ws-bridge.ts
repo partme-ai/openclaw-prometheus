@@ -1,19 +1,8 @@
 /**
- * Gateway Runtime 桥接层
+ * 兼容层
  *
- * 与 openclaw_management 使用相同的 Runtime 内部调用模式，
- * 通过 runtime.gatewayCall / runtime.invoke / 属性遍历
- * 执行 Gateway RPC 方法调用。
- *
- * 只调用 Gateway 已确认暴露的 RPC 方法：
- * - health / status
- * - channels.status
- * - sessions.list
- * - agents.list / models.list / node.list
- * - cron.status / cron.list
- * - system-presence
- * - usage.status / usage.cost
- * - skills.status / skills.bins
+ * `openclaw-prometheus` 已切换为纯插件机制实现。
+ * 这里保留仅为兼容旧 collector 文件，避免构建期间出现导入错误。
  */
 
 import type { GatewayRuntime } from "./types.js";
@@ -63,39 +52,9 @@ export async function rpcCall<T = unknown>(
   method: string,
   params?: Record<string, unknown>
 ): Promise<T> {
-  const runtime = getRuntime();
-  const runtimeAny = runtime as unknown as Record<string, unknown>;
-
-  // 策略 1: gatewayCall（首选）
-  if (typeof runtimeAny.gatewayCall === "function") {
-    return (runtimeAny.gatewayCall as (m: string, p?: Record<string, unknown>) => Promise<T>)(
-      method,
-      params
-    );
-  }
-
-  // 策略 2: invoke（通用接口）
-  if (typeof runtimeAny.invoke === "function") {
-    return (runtimeAny.invoke as (m: string, p?: Record<string, unknown>) => Promise<T>)(
-      method,
-      params
-    );
-  }
-
-  // 策略 3: 属性遍历（"agents.list" → runtime.agents.list()）
-  const parts = method.split(".");
-  let target: unknown = runtime;
-  for (const part of parts.slice(0, -1)) {
-    target = (target as Record<string, unknown>)?.[part];
-    if (!target) break;
-  }
-  const funcName = parts[parts.length - 1];
-  if (target && typeof (target as Record<string, unknown>)[funcName] === "function") {
-    return (target as Record<string, (...args: unknown[]) => Promise<T>>)[funcName](params);
-  }
-
-  // 降级：返回空结果
-  return {} as T;
+  throw new Error(
+    `[openclaw-prometheus] rpcCall("${method}") is not available in pure plugin mode. Use documented api.runtime.* helpers, hooks, events, or plugin-owned routes instead.`
+  );
 }
 
 /**

@@ -15,7 +15,10 @@ describe("assertScrapeAuthorized", () => {
       port: 9090,
       metricsPath: "/metrics",
       collectIntervalMs: 0,
+      snapshotIntervalMs: 30000,
+      workloadWindowMs: 300000,
       includeRuntime: true,
+      monitoredProviders: [],
       scrapeAuthEnabled: false,
       scrapeBearerToken: undefined,
     };
@@ -29,7 +32,10 @@ describe("assertScrapeAuthorized", () => {
       port: 9090,
       metricsPath: "/metrics",
       collectIntervalMs: 0,
+      snapshotIntervalMs: 30000,
+      workloadWindowMs: 300000,
       includeRuntime: true,
+      monitoredProviders: [],
       scrapeAuthEnabled: true,
       scrapeBearerToken: undefined,
     };
@@ -44,7 +50,10 @@ describe("assertScrapeAuthorized", () => {
       port: 9090,
       metricsPath: "/metrics",
       collectIntervalMs: 0,
+      snapshotIntervalMs: 30000,
+      workloadWindowMs: 300000,
       includeRuntime: true,
+      monitoredProviders: [],
       scrapeAuthEnabled: true,
       scrapeBearerToken: "secret",
     };
@@ -59,7 +68,10 @@ describe("assertScrapeAuthorized", () => {
       port: 9090,
       metricsPath: "/metrics",
       collectIntervalMs: 0,
+      snapshotIntervalMs: 30000,
+      workloadWindowMs: 300000,
       includeRuntime: true,
+      monitoredProviders: [],
       scrapeAuthEnabled: true,
       scrapeBearerToken: "ok",
     };

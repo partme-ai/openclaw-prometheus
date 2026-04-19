@@ -3,7 +3,7 @@
  * 将指标数据转换为结构化 JSON
  */
 
-import type { MetricDefinition, MetricSample } from "../types.js";
+import type { CollectorDiagnostic, MetricDefinition, MetricSample } from "../types.js";
 
 /**
  * JSON 指标输出结构
@@ -11,6 +11,7 @@ import type { MetricDefinition, MetricSample } from "../types.js";
 export interface JsonMetricsOutput {
   /** 采集时间 */
   timestamp: string;
+  diagnostics?: CollectorDiagnostic[];
   /** 指标列表 */
   metrics: Array<{
     name: string;
@@ -32,7 +33,8 @@ export interface JsonMetricsOutput {
  */
 export function formatJson(
   definitions: MetricDefinition[],
-  samples: MetricSample[]
+  samples: MetricSample[],
+  diagnostics: CollectorDiagnostic[] = []
 ): JsonMetricsOutput {
   // 按指标名分组样本
   const samplesByName = new Map<string, MetricSample[]>();
@@ -44,6 +46,7 @@ export function formatJson(
 
   return {
     timestamp: new Date().toISOString(),
+    ...(diagnostics.length > 0 ? { diagnostics } : {}),
     metrics: definitions.map((def) => ({
       name: def.name,
       help: def.help,

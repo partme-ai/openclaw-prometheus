@@ -24,41 +24,49 @@ export class SkillCollector implements MetricCollector {
   definitions: MetricDefinition[] = [
     { name: `${PREFIX}_total`, help: "Total registered skills", type: "gauge" },
     { name: `${PREFIX}_bins_total`, help: "Total skill binaries installed", type: "gauge" },
+    { name: `${PREFIX}_enabled_total`, help: "Enabled skills", type: "gauge" },
+    { name: `${PREFIX}_disabled_total`, help: "Disabled skills", type: "gauge" },
+    { name: `${PREFIX}_eligible_total`, help: "Eligible skills", type: "gauge" },
+    { name: `${PREFIX}_blocked_total`, help: "Skills blocked by allowlist", type: "gauge" },
   ];
 
   /**
    * 采集 Skill 指标
    */
   async collect(): Promise<MetricSample[]> {
+    const [statusResult, binsResult] = await Promise.all([
+      rpcCall<unknown>("skills.status"),
+      rpcCall<unknown>("skills.bins"),
+    ]);
+
     const samples: MetricSample[] = [];
+    const statusObj = statusResult && typeof statusResult === "object"
+      ? (statusResult as Record<string, unknown>)
+      : {};
+    const skills = Array.isArray(statusObj.skills)
+      ? (statusObj.skills as Array<Record<string, unknown>>)
+      : [];
+    const skillCount = typeof statusObj.count === "number" ? statusObj.count : skills.length;
+    const enabledCount = skills.filter((skill) => skill.disabled !== true).length;
+    const blockedCount = skills.filter((skill) => skill.blockedByAllowlist === true).length;
+    const eligibleCount = skills.filter((skill) => skill.eligible !== false).length;
 
-    try {
-      const [statusResult, binsResult] = await Promise.all([
-        rpcCall<unknown>("skills.status").catch(() => ({})),
-        rpcCall<unknown>("skills.bins").catch(() => []),
-      ]);
+    samples.push({ name: `${PREFIX}_total`, value: skillCount });
+    samples.push({ name: `${PREFIX}_enabled_total`, value: enabledCount });
+    samples.push({ name: `${PREFIX}_disabled_total`, value: Math.max(skillCount - enabledCount, 0) });
+    samples.push({ name: `${PREFIX}_eligible_total`, value: eligibleCount });
+    samples.push({ name: `${PREFIX}_blocked_total`, value: blockedCount });
 
-      // skills.status
-      let skillCount = 0;
-      if (statusResult && typeof statusResult === "object") {
-        const obj = statusResult as Record<string, unknown>;
-        if (typeof obj.count === "number") skillCount = obj.count;
-        else if (Array.isArray(obj.skills)) skillCount = obj.skills.length;
+    let binCount = 0;
+    if (Array.isArray(binsResult)) {
+      binCount = binsResult.length;
+    } else if (binsResult && typeof binsResult === "object") {
+      const obj = binsResult as Record<string, unknown>;
+      if (Array.isArray(obj.bins)) {
+        binCount = obj.bins.length;
       }
-      samples.push({ name: `${PREFIX}_total`, value: skillCount });
-
-      // skills.bins
-      let binCount = 0;
-      if (Array.isArray(binsResult)) {
-        binCount = binsResult.length;
-      } else if (binsResult && typeof binsResult === "object") {
-        const obj = binsResult as Record<string, unknown>;
-        if (Array.isArray(obj.bins)) binCount = obj.bins.length;
-      }
-      samples.push({ name: `${PREFIX}_bins_total`, value: binCount });
-    } catch {
-      samples.push({ name: `${PREFIX}_total`, value: 0 });
     }
+    samples.push({ name: `${PREFIX}_bins_total`, value: binCount });
 
     return samples;
   }

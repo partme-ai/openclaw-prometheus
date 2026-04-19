@@ -3,7 +3,7 @@
 
 # OpenClaw Prometheus
 
-**OpenClaw 插件：基于 Gateway RPC 的 Prometheus 指标与 JSON 诊断端点**
+**OpenClaw 插件：基于官方插件 SDK 的 Prometheus 指标与 JSON 诊断端点**
 
 ![npm](https://img.shields.io/badge/npm-@partme.ai%2Fopenclaw__prometheus-blue)
 ![Node](https://img.shields.io/badge/Node.js-20+-green)
@@ -15,21 +15,30 @@
 
 ## 简介
 
-`@partme.ai/openclaw-prometheus` 是面向 [OpenClaw](https://github.com/openclaw/openclaw) 的**非渠道**插件，按官方文档使用 [`definePluginEntry`](https://docs.openclaw.ai/plugins/sdk-entrypoints#definepluginentry)（见 [Building plugins](https://docs.openclaw.ai/plugins/building-plugins)），在 Gateway 上注册 HTTP 路由。采集器通过 `gatewayCall` / `invoke` 调用 `health`、`channels.status`、`sessions.list`、`usage.*`、`system-presence`、`cron.*`、`models.list`、`node.list`、`skills.*` 等 RPC，并输出 Prometheus 文本或 JSON。
+`@partme.ai/openclaw-prometheus` 是面向 [OpenClaw](https://github.com/openclaw/openclaw) 的**非渠道**插件，按官方文档使用 [`definePluginEntry`](https://docs.openclaw.ai/plugins/sdk-entrypoints#definepluginentry)，并严格依赖文档化的插件机制：manifest discovery、`api.runtime.*`、插件 hooks、runtime events 和插件自有 HTTP 路由。
+
+这一版刻意不依赖宿主私有源码和未文档化 Gateway 内部接口。指标只基于插件可以合法观测到的事实构建：
+
+- `api.runtime.modelAuth`、`api.runtime.channel`、`api.runtime.state`
+- `message_received`、`message_sent`、`before_tool_call`、`after_tool_call`、`llm_output`、`agent_end` 等 hook
+- `api.runtime.events.onAgentEvent(...)` 与 `onSessionTranscriptUpdate(...)`
+- exporter 自身的 scrape、route、snapshot 健康指标
 
 ## 核心能力
 
-- **多采集器**：健康、渠道、会话、用量、在线、cron、模型、节点、skills，以及可选的 Node 运行时指标（`openclaw_nodejs_*`）。
-- **端点**：`{path}`（默认 `/metrics`）暴露 Prometheus；`{path}/per-object`、`{path}/detailed?family=` 提供 JSON。
-- **采集缓存**：`collectIntervalMs` 在多次抓取间复用上一次成功结果，减轻 RPC 压力；设为 `0` 则每次抓取全量采集。
+- **纯插件架构**：只使用官方 SDK 暴露的稳定能力，不需要修改 OpenClaw 核心。
+- **三层指标面**：exporter 自身指标、runtime 快照指标、hooks/events 驱动的 workload 指标。
+- **端点**：`{path}`（默认 `/metrics`）暴露 Prometheus；`{path}/per-object`、`{path}/detailed?family=`、`{path}/health` 提供 JSON。
+- **快照刷新**：`snapshotIntervalMs` 控制 model auth 与 channel activity 的探测周期。
+- **采集缓存**：`collectIntervalMs` 在多次抓取间复用上一次成功结果，减轻抓取成本；设为 `0` 则每次抓取全量采集。
 - **元指标**：`openclaw_exporter_build_info`、`openclaw_metrics_last_scrape_duration_seconds`。
 - **可选抓取鉴权**：推荐使用环境变量 `openclaw-prometheus_BEARER_TOKEN`；仅本地调试可在配置中写 `scrapeAuth.bearerToken`。
 - **企业级运维取向**（命名与分层方式参考 [RabbitMQ Prometheus 文档](https://www.rabbitmq.com/docs/prometheus) 中的实践：专用路径、聚合与按实体 JSON、TLS 由 Gateway/反向代理终止、控制高基数标签使用等）。
 
 ### 生命周期
 
-- 通过 `package.json` → `openclaw.extensions` 随 Gateway 加载。
-- `register()` 注入 `api.runtime`（RPC）与 `api.config`，并 `registerHttpRoute` 注册路由。
+- 通过 `package.json` / `openclaw.plugin.json` 随 Gateway discovery 加载。
+- `register()` 注入 `api.runtime` 与 `api.config`，注册 hooks / events 监听和 exporter 路由。
 - manifest 中的 `port` 主要供运维参考；实际监听端口以 Gateway 为准（或由前置代理暴露）。
 
 ## 端点说明
@@ -39,6 +48,7 @@
 | `GET {path}` | Prometheus text | 标准抓取 |
 | `GET {path}/per-object` | JSON | 按对象分组 |
 | `GET {path}/detailed?family=` | JSON | 按名称子串过滤 |
+| `GET {path}/health` | JSON | exporter 健康与最近 snapshot 状态 |
 
 默认 `{path}` 为 `/metrics`。
 
@@ -46,16 +56,15 @@
 
 | 前缀 | 数据来源 |
 | --- | --- |
-| `openclaw_*` | `health` |
-| `openclaw_channel_*` | `channels.status` |
-| `openclaw_session_*` | `sessions.list` |
-| `openclaw_usage_*` | `usage.cost` → `totals`（时间窗全局汇总） |
-| `openclaw_usage_provider_*{provider=""}` | `sessions.usage` → `aggregates.byProvider`（按模型供应商拆分的 token/费用） |
-| `openclaw_presence_*` | `system-presence` |
-| `openclaw_cron_*` | `cron.status` / `cron.list` |
-| `openclaw_model_*` | `models.list` |
-| `openclaw_node_*` | `node.list` |
-| `openclaw_skill_*` | `skills.status` / `skills.bins` |
+| `openclaw_metrics_*` | exporter 自己的 route / scrape 指标 |
+| `openclaw_model_auth_*` | `api.runtime.modelAuth` |
+| `openclaw_channel_*` | message hooks + `api.runtime.channel.activity.get(...)` |
+| `openclaw_agent_*` | `before_agent_start` / `agent_end` + runtime agent events |
+| `openclaw_tool_*` | `before_tool_call` / `after_tool_call` |
+| `openclaw_messages_*` | `message_received` / `message_sent` |
+| `openclaw_usage_*` | `llm_output` usage 聚合 |
+| `openclaw_session_transcript_*` | `api.runtime.events.onSessionTranscriptUpdate(...)` |
+| `openclaw_runtime_*` | runtime namespace 可用性 + state/snapshot age |
 | `openclaw_nodejs_*` | 本进程（`includeRuntime`） |
 | `openclaw_exporter_*`、`openclaw_metrics_*` | 插件自身 |
 
@@ -83,7 +92,10 @@ openclaw plugins install @partme.ai/openclaw-prometheus
         "config": {
           "path": "/metrics",
           "collectIntervalMs": 15000,
+          "snapshotIntervalMs": 30000,
+          "workloadWindowMs": 300000,
           "includeRuntime": true,
+          "monitoredProviders": ["openai", "anthropic", "gemini"],
           "scrapeAuth": {
             "enabled": false
           }
@@ -107,7 +119,7 @@ openclaw-prometheus_BEARER_TOKEN=secret pnpm run test:client -- http://127.0.0.1
 
 ## Grafana 看板
 
-从 [`grafana/`](./grafana/) 导入单节点与集群两套 JSON，说明见 [`grafana/README.md`](./grafana/README.md)。
+从 [`grafana/`](./grafana/) 导入单节点与集群两套 JSON。Prometheus 负责指标，Loki 负责日志历史，接入说明见 [`grafana/README.md`](./grafana/README.md)。
 
 ## 开发与测试
 
