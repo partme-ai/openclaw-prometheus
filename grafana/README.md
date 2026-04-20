@@ -1,4 +1,4 @@
-# OpenClaw Grafana dashboards
+# OpenClaw Grafana Dashboards
 
 Ready-to-import Grafana dashboards for metrics from **`@partme.ai/openclaw-prometheus`**.
 
@@ -6,160 +6,388 @@ The exporter is a **pure OpenClaw plugin**: metrics come from documented `api.ru
 
 ---
 
-## Which dashboard to import
+## 📊 Dashboard Overview
 
-| File | Scope | When to use |
-|------|--------|-------------|
-| **[openclaw-prometheus-cockpit.json](./openclaw-prometheus-cockpit.json)** | Single scrape target | **Recommended.** Dark “operations cockpit”: health, workload, LLM tokens, hook activity, compaction/subagent, model-auth probes, channels, Node.js process, exporter HTTP/collectors. Queries match **current plugin code**. |
-| **[openclaw-prometheus-cockpit-cluster.json](./openclaw-prometheus-cockpit-cluster.json)** | Multi-target | Same layout as the cockpit, plus **`instance`** template variable (`label_values(openclaw_up, instance)`). Use when each Gateway has its own Prometheus target. |
-| [openclaw-gateway-single.json](./openclaw-gateway-single.json) | Single node | **Legacy / optional.** Mix of panels that assumed extra Gateway RPC collectors; several series may show **no data** in plugin-only deployments. Prefer the cockpit JSON above. |
-| [openclaw-gateway-cluster.json](./openclaw-gateway-cluster.json) | Cluster | **Legacy / optional.** Same caveat as single-node legacy file. |
+| Dashboard | Panels | Type | Use Case |
+|-----------|---------|------|----------|
+| **[cluster/dashboard-overview.json](./cluster/dashboard-overview.json)** | 8 | Cluster Overview | **Production-ready.** Multi-instance SLO monitoring with instance switching. Recommended for production. |
+| **[cluster/dashboard-metrics.json](./cluster/dashboard-metrics.json)** | 10 | Detailed Metrics | **Production-ready.** Multi-instance detailed metrics with repeat panels. Recommended for production. |
 
 ---
 
-## Import
+## 🎯 Dashboard 1: Cluster Overview
 
-1. Grafana → **Dashboards** → **New** → **Import** → upload JSON (or paste).
-2. Map **`DS_PROMETHEUS`** to your Prometheus data source.
-3. Optional: map **`DS_LOKI`** only if you attach log panels yourself (these JSON files do not require Loki).
-4. Save.
+**File**: `cluster/dashboard-overview.json`
 
-**Troubleshooting**
+**Panels**: 8
 
-- **`Old dashboard JSON format`**: Import the **raw `.json` file** from this folder, not an HTTP API wrapper (`meta` + `dashboard`).
-- **No `instance` label**: Single-node cockpit does not need it. For the cluster cockpit, add a `relabel_config` that sets `instance` from `host:port` or your pod name, or change the variable query to your label.
-- **Empty Node.js panels**: Set plugin config `includeRuntime: true` (default) so `openclaw_nodejs_*` is scraped.
+| Panel | Type | Description |
+|-------|------|-------------|
+| Cluster Health | Stat | Instance count / Up / Ready / Healthy status |
+| System Status | Stat | Avg uptime / Snapshot age / Scrape time |
+| Message Throughput | Graph | Sent / Received / Error rates |
+| Agent Activity | Graph | Started / Failed / Error rate |
+| Tool Activity | Graph | Calls / Failures / Error rate |
+| Channel Health | Graph | Failure rate / Health ratio |
+| Metric Series | Gauge | Total series count (cardinality) |
+| HTTP Latency | Gauge | P95 / P99 latency |
 
-**Tested schema:** Grafana 10.x+ (`schemaVersion` 39).
-
----
-
-## Metric reference (plugin export)
-
-The following groups reflect **metrics emitted by the current plugin implementation** (names and labels are stable for alerting and dashboards).
-
-### Exporter / scrape meta
-
-| Metric | Type | Labels / notes |
-|--------|------|----------------|
-| `openclaw_exporter_build_info` | gauge | `plugin`, `version` |
-| `openclaw_up` | gauge | Plugin loaded |
-| `openclaw_ready` | gauge | Observed `gateway_start` |
-| `openclaw_plugin_uptime_seconds` | gauge | Plugin process uptime |
-| `openclaw_metrics_last_scrape_duration_seconds` | gauge | Last collect wall time (includes cache) |
-| `openclaw_metrics_collector_success` | gauge | `collector` — last collect ok (1/0) |
-| `openclaw_metrics_collect_errors_total` | counter | `collector` — cumulative collect failures |
-| `openclaw_metrics_http_requests_total` | counter | `method`, `route`, `status` |
-| `openclaw_metrics_http_request_duration_seconds_*` | counter | Summary pairs; `method`, `route` |
-| `openclaw_gateway_operator_rpc_requests_total` | counter | `method` — e.g. `openclaw.prometheus.status` |
-
-### Runtime snapshot & model auth
-
-| Metric | Type | Labels / notes |
-|--------|------|----------------|
-| `openclaw_runtime_snapshot_age_seconds` | gauge | Staleness since last snapshot refresh |
-| `openclaw_runtime_snapshot_refresh_timestamp_seconds` | gauge | Unix time of last refresh |
-| `openclaw_runtime_namespace_available` | gauge | `namespace`: `events`, `modelAuth`, `channel`, `state` |
-| `openclaw_runtime_state_dir_configured` | gauge | State dir resolved |
-| `openclaw_model_auth_provider_status` | gauge | One-hot per `provider`; `status` `ok` / `missing` / `error` |
-| `openclaw_model_auth_provider_info` | gauge | `provider`, `source`, `mode` |
-| `openclaw_model_auth_provider_probe_errors_total` | counter | `provider` — exceptions during probe |
-
-### Messages & channels
-
-| Metric | Type | Labels / notes |
-|--------|------|----------------|
-| `openclaw_messages_received_total` | counter | `channel` |
-| `openclaw_messages_sent_total` | counter | `channel`, `result` |
-| `openclaw_channel_failures_total` | counter | `channel`, `reason` |
-| `openclaw_channel_last_event_timestamp_seconds` | gauge | `channel`, `account` |
-| `openclaw_channel_last_inbound_age_seconds` | gauge | `channel`, `account` |
-| `openclaw_channel_last_outbound_age_seconds` | gauge | `channel`, `account` |
-
-### Sessions & transcript
-
-| Metric | Type | Labels / notes |
-|--------|------|----------------|
-| `openclaw_sessions_started_total` | counter | — |
-| `openclaw_sessions_ended_total` | counter | `reason` |
-| `openclaw_sessions_active_estimated` | gauge | Estimated from hooks |
-| `openclaw_session_transcript_updates_total` | counter | — |
-| `openclaw_session_transcript_last_update_timestamp_seconds` | gauge | — |
-| `openclaw_session_transcript_last_seen_timestamp_seconds` | gauge | `scope` |
-| `openclaw_session_compaction_events_total` | counter | `phase`: `before` / `after` |
-| `openclaw_session_compaction_messages_compacted_total` | counter | — |
-| `openclaw_session_compaction_last_tokens_before` | gauge | Last `before_compaction` token estimate |
-| `openclaw_session_compaction_last_tokens_after` | gauge | Last `after_compaction` token estimate |
-| `openclaw_session_reset_requests_total` | counter | `reason` (normalized / low cardinality) |
-
-### Agent / tools / subagent
-
-| Metric | Type | Labels / notes |
-|--------|------|----------------|
-| `openclaw_agent_runs_started_total` | counter | `agent_id`, `channel` |
-| `openclaw_agent_runs_total` | counter | `agent_id`, `result` |
-| `openclaw_agent_run_duration_seconds_*` | counter | Summary; `agent_id`, `result` |
-| `openclaw_agent_events_total` | counter | `stream` |
-| `openclaw_agent_item_events_total` | counter | `kind`, `phase`, `status` |
-| `openclaw_tool_calls_total` | counter | `tool` |
-| `openclaw_tool_call_failures_total` | counter | `tool` |
-| `openclaw_tool_call_duration_seconds_*` | counter | Summary; `tool` |
-| `openclaw_tool_result_persist_total` | counter | `tool` |
-| `openclaw_inflight_operations` | gauge | `kind`: `agent`, `tool`, … |
-| `openclaw_subagent_ended_total` | counter | `outcome` |
-
-### LLM usage & extended hooks
-
-| Metric | Type | Labels / notes |
-|--------|------|----------------|
-| `openclaw_usage_tokens_input_total` | counter | `provider`, `model` |
-| `openclaw_usage_tokens_output_total` | counter | `provider`, `model` |
-| `openclaw_usage_tokens_cache_read_total` | counter | `provider`, `model` |
-| `openclaw_usage_tokens_cache_write_total` | counter | `provider`, `model` |
-| `openclaw_usage_tokens_total` | counter | `provider`, `model` |
-| `openclaw_llm_input_images_total` | counter | `provider`, `model` |
-| `openclaw_plugin_hook_invocations_total` | counter | `hook` — full `PluginHookName` coverage for supplementary hooks |
-
-### Node.js process (`includeRuntime`)
-
-| Metric | Type | Notes |
-|--------|------|--------|
-| `openclaw_nodejs_heap_used_bytes` | gauge | |
-| `openclaw_nodejs_heap_total_bytes` | gauge | |
-| `openclaw_nodejs_external_bytes` | gauge | |
-| `openclaw_nodejs_array_buffers_bytes` | gauge | |
-| `openclaw_nodejs_rss_bytes` | gauge | |
-| `openclaw_nodejs_event_loop_lag_ms` | gauge | |
-| `openclaw_nodejs_uptime_seconds` | gauge | |
-| `openclaw_nodejs_process_cpu_user_seconds_total` | counter | Cumulative CPU user time |
-| `openclaw_nodejs_process_cpu_system_seconds_total` | counter | Cumulative CPU system time |
-
-### Optional / not wired in default plugin build
-
-The repository may still contain **collector modules** (e.g. health, channels, cron) that expect Gateway private RPC. Those metrics are **not** registered by the current plugin `index.ts` entrypoint. Legacy dashboards that reference names such as `openclaw_channel_linked_total`, `openclaw_usage_cost_usd_total`, or `openclaw_session_total` may stay empty unless you run a custom build that wires those collectors.
+**Features**:
+- ✅ Supports `$openclaw_instance` variable (multi-instance switching)
+- ✅ Color-coded thresholds (green/yellow/red)
+- ✅ Real-time 10s refresh
+- ✅ Professional styling (lineWidth 2, fillOpacity 0.1)
 
 ---
 
-## Prometheus labels
+## 🎯 Dashboard 2: Detailed Metrics
 
-- **Cluster cockpits** assume an **`instance`** label on scrape targets (Prometheus adds `host:port` by default).
-- To use another identity label, edit the dashboard variable query and replace `instance=~"$instance"` in panel expressions.
+**File**: `cluster/dashboard-metrics.json`
+
+**Panels**: 10
+
+| Panel | Type | Description |
+|-------|------|-------------|
+| Agent Performance - All Instances | Timeseries | P95/P99 latency per instance (repeated 3x) |
+| Tool Performance - All Instances | Timeseries | P95/P99 latency per instance (repeated 3x) |
+| Message Throughput - All Instances | Graph | Sent/Received rate per instance (repeated 2x) |
+| Channel Health - By Queue | Timeseries | Failure rate / Health ratio per queue (repeated 3x) |
+| System Status - By Node | Timeseries | Up/Ready/Uptime per node (repeated 3x) |
+| Collector Status - By Instance | Table | Scrape time / Success rate per instance (repeated 2x) |
+| HTTP Request Latency - All Instances | Timeseries | P95/P95 latency per instance (repeated 2x) |
+| Metric Series - By Instance | Graph | Total series count per instance (repeated 2x) |
+| Agent Run Distribution - By Instance | Timeseries | Started/Failed rate per instance (repeated 1x) |
+
+**Features**:
+- ✅ Supports 3 variables: `$openclaw_instance`, `$openclaw_queue`, `$openclaw_node`
+- ✅ Repeat panels for multi-instance comparison
+- ✅ Table views for collector status
+- ✅ Real-time 10s refresh
+- ✅ Professional styling (lineWidth 2, fillOpacity 0.1)
 
 ---
 
-## Queries & alerting hints
+## 🚀 Multi-Instance Support
 
-- **Availability**: `openclaw_up == 0`, `openclaw_ready == 0`.
-- **Scrape health**: rising `openclaw_metrics_collect_errors_total` or `openclaw_metrics_last_scrape_duration_seconds` SLO breach.
-- **Auth**: non-zero `rate(openclaw_model_auth_provider_probe_errors_total[15m])` or `openclaw_model_auth_provider_status{status="error"} == 1`.
-- **Workload**: `rate(openclaw_agent_runs_total[5m])`, token rates from `openclaw_usage_*_total`.
-- **Process**: `rate(openclaw_nodejs_process_cpu_user_seconds_total[2m])`, `openclaw_nodejs_heap_used_bytes`, `openclaw_nodejs_event_loop_lag_ms`.
+### Variable Configuration
+
+| Variable | Type | Query | Description |
+|----------|------|--------|-------------|
+| `$openclaw_instance` | Query | `label_values(openclaw_up, instance)` | Switch between all instances |
+| `$openclaw_queue` | Query | `label_values(openclaw_channel, queue)` | Filter by channel/queue |
+| `$openclaw_node` | Query | `label_values(openclaw_node, node)` | Filter by node (if configured) |
+
+### Instance Label Setup
+
+**Option 1: Environment Variable**
+```bash
+export INSTANCE="my-gateway-node-01"
+```
+
+**Option 2: Prometheus Relabel Config**
+```yaml
+scrape_configs:
+  - job_name: 'openclaw'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        regex: '([^:]+)(:[0-9]+)?'
+        replacement: '${1}'
+```
+
+**Option 3: Kubernetes Config**
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: openclaw-prometheus
+spec:
+  containers:
+    - name: openclaw-prometheus
+      env:
+        - name: INSTANCE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+```
 
 ---
 
-## 中文说明
+## 🎨 Dashboard Design
 
-- **推荐使用**：**[openclaw-prometheus-cockpit.json](./openclaw-prometheus-cockpit.json)**（单实例）与 **[openclaw-prometheus-cockpit-cluster.json](./openclaw-prometheus-cockpit-cluster.json)**（多实例，带 **Instance** 变量）。布局为深色运营驾驶舱风格，PromQL 与 **当前插件实现** 一致。
-- **旧版看板** `openclaw-gateway-*.json` 中部分面板依赖历史上假设的 Gateway RPC 采集数据，在仅启用本插件时可能出现 **无数据**，请以新驾驶舱为准。
-- 导入时在向导中为 **`DS_PROMETHEUS`** 绑定 Prometheus；指标表见上文 **Metric reference**。
-- 日志与长期审计请走 **Loki**，不要塞进 Prometheus 指标。
+### Color Scheme
+
+| Level | Color | Scenario |
+|-------|-------|----------|
+| **Normal** | Green (#73BF69) | All metrics OK |
+| **Warning** | Yellow (#FFD700) | SLO near threshold |
+| **Error** | Red (#FF3B30) | SLO breached or system down |
+
+### Layout
+
+- **Grid-based**: 4 columns, responsive (1920x1080 + 2560x1440)
+- **Collapsed panels**: Complex panels collapsed by default (expandable)
+- **Table sorting**: Collector status table sorted by instance
+- **Time sync**: Browser local timezone, 10s refresh
+
+---
+
+## 📊 Metric Reference
+
+### SLO Ratios
+
+| Metric | Description | Calculation | Alert Threshold |
+|--------|-------------|-------------|------------------|
+| `openclaw_sli_message_success_ratio` | Message success rate | `sent_ok / (sent_ok + sent_error)` | < 0.95 |
+| `openclaw_sli_agent_error_ratio` | Agent error rate | `agent_failed / agent_started` | > 0.1 |
+| `openclaw_sli_tool_error_ratio` | Tool error rate | `tool_failures / tool_total` | > 0.05 |
+| `openclaw_sli_channel_health_ratio` | Channel health rate | `linked / total` | < 0.95 |
+
+### Performance Metrics
+
+| Metric | Type | Query | Alert Threshold |
+|--------|------|--------|------------------|
+| `openclaw_agent_run_duration_seconds` | Histogram | `histogram_quantile(0.95, rate(..._bucket[5m]))` | > 300s |
+| `openclaw_tool_call_duration_seconds` | Histogram | `histogram_quantile(0.95, rate(..._bucket[5m]))` | > 10s |
+| `openclaw_sli_http_request_p95_seconds` | Gauge | Direct query | > 0.5s |
+| `openclaw_sli_http_request_p99_seconds` | Gauge | Direct query | > 1s |
+
+### Health Metrics
+
+| Metric | Description | Alert Threshold |
+|--------|-------------|------------------|
+| `openclaw_up` | Plugin loaded status | = 0 |
+| `openclaw_ready` | Plugin initialized status | = 0 |
+| `openclaw_gateway_healthz_healthy` | Overall health status | = 0 |
+| `openclaw_runtime_snapshot_age_seconds` | Snapshot staleness | > 60s |
+| `openclaw_metrics_series_total` | Metric cardinality | > 100K |
+
+---
+
+## 📋 Import Steps
+
+### 1. Import Dashboards
+
+```bash
+# Option 1: Upload files
+grafana/import cluster/dashboard-overview.json
+grafana/import cluster/dashboard-metrics.json
+
+# Option 2: Paste JSON
+cat cluster/dashboard-overview.json | xclip
+cat cluster/dashboard-metrics.json | xclip
+# In Grafana UI: Dashboards → New → Import → Paste JSON
+```
+
+### 2. Configure Data Source
+
+- **DS_PROMETHEUS**: `http://localhost:9090`
+- **Scrape Interval**: 10s (syncs with dashboard refresh)
+- **Time Range**:
+  - Overview Dashboard: Last 15 minutes
+  - Metrics Dashboard: Last 1 hour
+
+### 3. Select Instance
+
+1. Click the dropdown arrow next to the dashboard title
+2. Select an instance from `$openclaw_instance` variable
+3. All panels will filter to show only that instance
+4. To view all instances: Select `All` from the dropdown
+
+---
+
+## 🔧 Customization
+
+### 1. Add More Metrics
+
+In `cluster/dashboard-overview.json` add:
+- Node.js process metrics (`openclaw_nodejs_*`)
+- Memory usage trends
+- Event loop latency (`openclaw_nodejs_event_loop_lag_ms`)
+
+### 2. Add Cross-Instance Aggregation
+
+Add summary panels:
+```promql
+# Total throughput (all instances)
+sum(rate(openclaw_session_messages_sent_total{result="ok"}[5m]))
+
+# Average error rate (all instances)
+avg(openclaw_sli_agent_error_ratio)
+
+# Total active sessions (all instances)
+sum(openclaw_sessions_active_estimated)
+```
+
+### 3. Add Topology View
+
+Use instance and node variables to create a network topology:
+- **Center node**: All instances
+- **Connections**: Channels linking instances
+- **Status**: Color-coded by health status
+
+---
+
+## 📈 Performance Tuning
+
+### 1. Reduce Query Load
+
+- Use specific time ranges: `time > now-1h` instead of `time > now-24h`
+- Set reasonable refresh intervals: 10s (Overview), 30s (Metrics)
+- Use table legends: `displayMode: "table"` instead of `displayMode: "list"`
+
+### 2. Optimize Repeat Panels
+
+- Set `collapsed: true` for complex repeat panels
+- Limit `maxPerRow` to 3-4 panels per row
+- Use `min_span: 12` for better comparison
+
+### 3. Cache Variable Results
+
+- Set `refresh: 2` for variable queries (less frequent)
+- Use `allValue: "All"` instead of `null` (avoid empty states)
+- Enable `multi: false` for single-select variables
+
+---
+
+## 🚀 Deployment
+
+### 1. Single-Instance Deployment
+
+**Dashboard**: `cluster/dashboard-overview.json`
+
+**Configuration**:
+- Select `All` from `$openclaw_instance` variable
+- Time range: Last 15 minutes
+
+**Reason**: Simplified view, no complex variable switching needed.
+
+### 2. Multi-Instance Deployment (Recommended)
+
+**Dashboard**: `cluster/dashboard-metrics.json`
+
+**Configuration**:
+- Select 2-3 instances from `$openclaw_instance` variable
+- Use `$openclaw_queue` to filter by channel
+- Use `$openclaw_node` to filter by node
+
+**Reason**: Detailed metrics comparison, ideal for production monitoring.
+
+### 3. Kubernetes Deployment
+
+**ConfigMap**: Configure instance label from pod metadata
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openclaw-prometheus-config
+data:
+  INSTANCE_NAME: "my-gateway-01"
+```
+
+**Deployment**: Mount ConfigMap as environment variable
+```yaml
+apiVersion: v1
+kind: Deployment
+metadata:
+  name: openclaw-prometheus
+spec:
+  template:
+    spec:
+      containers:
+        - name: openclaw-prometheus
+          env:
+            - name: INSTANCE
+              valueFrom:
+                configMapKeyRef:
+                  name: openclaw-prometheus-config
+                  key: INSTANCE_NAME
+```
+
+---
+
+## 🔍 Troubleshooting
+
+### 1. Empty Panels
+
+**Problem**: Panels show "No Data"
+
+**Solution**:
+1. Check Prometheus scrape interval: `curl http://localhost:9090/metrics | grep openclaw_up`
+2. Verify instance label is set: `curl http://localhost:9090/metrics | grep 'instance="'`
+3. Check dashboard time range: Should be `now-1h` or `now-15m`
+
+### 2. No Variable Options
+
+**Problem**: `$openclaw_instance` dropdown shows "No options"
+
+**Solution**:
+1. Verify instance label is exported: Check `openclaw.plugin.json` has `instance` field
+2. Check Prometheus relabel config: Verify `target_label: instance` is set
+3. Wait 2 scrape intervals: Variables refresh every 2s
+
+### 3. High Cardinality
+
+**Problem**: Dashboard loading is slow
+
+**Solution**:
+1. Reduce time range: Use Last 1 hour instead of Last 7 days
+2. Use `$openclaw_instance` variable: Filter to single instance
+3. Review high-cardinality labels: `agent_id`, `channel`, `account`
+
+### 4. Wrong Data
+
+**Problem**: Instance shows metrics from another instance
+
+**Solution**:
+1. Verify Prometheus relabel regex: `'([^:]+)(:[0-9]+)?'`
+2. Check for duplicate scrape targets: Ensure each target has unique `__address__`
+3. Use `label_values(openclaw_up{job="openclaw"}, instance)` (add job filter)
+
+---
+
+## 🎯 Best Practices
+
+### 1. Dashboard Organization
+
+- **Group related panels**: Use rows/cols to organize (e.g., "Health", "Performance", "Metrics")
+- **Collapsible sections**: Use `collapsed: true` for complex sections (expand on demand)
+- **Consistent naming**: Use descriptive titles (e.g., "Agent Performance" instead of "Metrics")
+
+### 2. Variable Usage
+
+- **Single-select for primary filters**: `$openclaw_instance` (choose one at a time)
+- **Multi-select for secondary filters**: `$openclaw_queue`, `$openclaw_node`
+- **Include "All" option**: Allows viewing aggregate metrics
+
+### 3. Query Optimization
+
+- **Use label filters**: `{instance=~"$openclaw_instance"}` instead of no filter
+- **Use rate functions**: `rate(...[5m])` for per-second calculations
+- **Avoid full scans**: Use specific metric names instead of regex patterns
+
+### 4. Alert Integration
+
+- **Link to Alertmanager**: Use annotation panel to link alerts
+- **Use alert variables**: `$alertname`, `$alertseverity`
+- **Show alert count**: Stat panel showing number of active alerts
+
+---
+
+## 📚 Related Resources
+
+- **OpenClaw Documentation**: https://docs.openclaw.ai
+- **Prometheus Documentation**: https://prometheus.io/docs
+- **Grafana Documentation**: https://grafana.com/docs
+- **Plugin README**: [../README.md](../README.md)
+- **Architecture Doc**: [../ARCHITECTURE.md](../ARCHITECTURE.md)
+- **Alert Rules**: [../alerts/prometheus.yml](../alerts/prometheus.yml)
+- **Config Template**: [../config/prometheus.example.yaml](../config/prometheus.example.yaml)
+
+---
+
+## 📝 Version History
+
+| Version | Date | Changes |
+|---------|------|---------|
+| v1.0 | 2026-04-20 | Initial cluster edition with 2 dashboards (Overview + Metrics), supporting multi-instance switching via `$openclaw_instance`, `$openclaw_queue`, and `$openclaw_node` variables |

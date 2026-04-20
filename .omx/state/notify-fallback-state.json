@@ -1,12 +1,12 @@
 {
-  "pid": 2696323,
+  "pid": 1855916,
   "parent_pid": 1300741,
-  "started_at": "2026-04-19T16:38:38.141Z",
+  "started_at": "2026-04-20T17:27:54.893Z",
   "cwd": "/home/wandl/workspaces/workspace-partme-ai/openclaw-plugins/openclaw-prometheus",
   "notify_script": "/home/wandl/.config/nvm/versions/node/v24.14.1/lib/node_modules/oh-my-codex/dist/scripts/notify-hook.js",
   "authority_only": true,
   "poll_ms": 75,
-  "effective_poll_ms": 75,
+  "effective_poll_ms": 1000,
   "idle_max_poll_ms": 1000,
   "pid_file": null,
   "max_lifetime_ms": 0,
@@ -17,7 +17,7 @@
     "max_per_tick": 5,
     "run_count": 1,
     "leader_only": true,
-    "last_tick_at": "2026-04-19T16:38:38.148Z",
+    "last_tick_at": "2026-04-20T17:27:54.896Z",
     "last_result": {
       "processed": 0,
       "skipped": 0,
@@ -29,8 +29,8 @@
     "enabled": true,
     "leader_only": true,
     "stale_threshold_ms": 180000,
-    "precomputed_leader_stale": true,
-    "last_tick_at": "2026-04-19T16:38:38.150Z",
+    "precomputed_leader_stale": false,
+    "last_tick_at": "2026-04-20T17:27:54.897Z",
     "last_error": null,
     "run_count": 1
   },
@@ -57,7 +57,7 @@
   "fallback_auto_nudge": {
     "enabled": true,
     "stall_ms": 5000,
-    "last_tick_at": "2026-04-19T16:38:38.232Z",
+    "last_tick_at": "2026-04-20T17:27:54.922Z",
     "last_turn_at": "2026-04-19T10:02:46.482Z",
     "last_turn_count": 0,
     "last_message": "",
@@ -78,11 +78,11 @@
     "enabled": true,
     "base_ms": 75,
     "max_ms": 1000,
-    "current_ms": 75,
-    "idle_streak": 0,
-    "last_tick_at": "2026-04-19T16:38:38.233Z",
-    "last_activity_at": "2026-04-19T16:38:38.233Z",
-    "last_activity_reason": "leader_nudge"
+    "current_ms": 1000,
+    "idle_streak": 19,
+    "last_tick_at": "2026-04-20T17:27:54.922Z",
+    "last_activity_at": "2026-04-20T12:19:19.958Z",
+    "last_activity_reason": "hud_state_incomplete"
   },
-  "last_cycle_activity": "leader_nudge"
+  "last_cycle_activity": "hud_state_incomplete"
 }

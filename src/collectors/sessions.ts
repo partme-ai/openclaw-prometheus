@@ -18,6 +18,11 @@ import type { MetricCollector, MetricDefinition, MetricSample, SessionEntry } fr
 import { rpcCall } from "../ws-bridge.js";
 
 const PREFIX = "openclaw_session";
+const SESSIONS_LIST_PARAMS = {
+  includeGlobal: true,
+  includeUnknown: false,
+  limit: 120,
+} as const;
 
 /**
  * Session 采集器
@@ -44,7 +49,7 @@ export class SessionCollector implements MetricCollector {
    * 调用 sessions.list 并从真实会话数据中聚合
    */
   async collect(): Promise<MetricSample[]> {
-    const result = await rpcCall<unknown>("sessions.list");
+    const result = await rpcCall<unknown>("sessions.list", SESSIONS_LIST_PARAMS);
     const sessions = normalizeSessions(result);
     const resultObj = result && typeof result === "object" ? (result as Record<string, unknown>) : {};
     const samples: MetricSample[] = [];

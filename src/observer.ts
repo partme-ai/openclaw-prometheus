@@ -4,6 +4,10 @@ import { getRuntimeStore, listObservedChannelAccounts, rememberObservedChannelAc
 
 const PROVIDER_STATUSES = ["ok", "missing", "error"] as const;
 
+// ─────────── HTTP 延迟环形缓冲区（用于计算 P95/P99） ───────────
+const HTTP_LATENCY_SAMPLES: number[] = [];
+const HTTP_LATENCY_MAX_SAMPLES = 1000;
+
 export function registerPluginObservers(api: OpenClawPluginApi): void {
   registerLifecycleHooks(api);
   registerMessageHooks(api);
@@ -15,16 +19,18 @@ export function registerPluginObservers(api: OpenClawPluginApi): void {
 
 function registerLifecycleHooks(api: OpenClawPluginApi): void {
   api.on("gateway_start", () => {
-    const { registry } = getRuntimeStore();
+    const { registry, cfg } = getRuntimeStore();
     registry.set("openclaw_ready", 1, {
       help: "Whether the plugin observed gateway_start and considers the exporter ready",
+      labels: { instance: cfg.instance ?? "default" },
     });
   });
 
   api.on("gateway_stop", () => {
-    const { registry } = getRuntimeStore();
+    const { registry, cfg } = getRuntimeStore();
     registry.set("openclaw_ready", 0, {
       help: "Whether the plugin observed gateway_start and considers the exporter ready",
+      labels: { instance: cfg.instance ?? "default" },
     });
   });
 
@@ -128,7 +134,7 @@ function registerToolHooks(api: OpenClawPluginApi): void {
       });
     }
     if (typeof event.durationMs === "number") {
-      registry.observeSummary("openclaw_tool_call_duration_seconds", event.durationMs / 1000, {
+      registry.observeHistogram("openclaw_tool_call_duration_seconds", event.durationMs / 1000, {
         help: "Observed tool call duration",
         labels: { tool: event.toolName },
       });
@@ -218,7 +224,7 @@ function registerAgentHooks(api: OpenClawPluginApi): void {
       },
     });
     if (typeof event.durationMs === "number") {
-      registry.observeSummary("openclaw_agent_run_duration_seconds", event.durationMs / 1000, {
+      registry.observeHistogram("openclaw_agent_run_duration_seconds", event.durationMs / 1000, {
         help: "Observed agent run duration",
         labels: {
           agent_id: agentId,
@@ -514,12 +520,14 @@ export async function refreshRuntimeSnapshots(force = false): Promise<void> {
 
 export function refreshHousekeepingMetrics(): void {
   const store = getRuntimeStore();
-  const { registry } = store;
+  const { registry, cfg } = store;
   registry.set("openclaw_up", 1, {
     help: "Whether the OpenClaw Prometheus plugin is loaded",
+    labels: { instance: cfg.instance ?? "default" },
   });
   registry.set("openclaw_ready", 1, {
     help: "Whether the OpenClaw Prometheus plugin runtime is initialized",
+    labels: { instance: cfg.instance ?? "default" },
   });
   registry.set("openclaw_plugin_uptime_seconds", (Date.now() - store.startedAt) / 1000, {
     help: "Plugin uptime in seconds",
@@ -550,6 +558,11 @@ export function refreshHousekeepingMetrics(): void {
   const stateDir = store.api.runtime.state?.resolveStateDir?.();
   registry.set("openclaw_runtime_state_dir_configured", stateDir ? 1 : 0, {
     help: "Whether api.runtime.state.resolveStateDir returned a value",
+  });
+
+  // ─────────── 新增：时间序列基数监控 ───────────
+  registry.set("openclaw_metrics_series_total", registry.snapshotSamples().length, {
+    help: "Total number of metric series (cardinality)",
   });
 }
 
@@ -594,4 +607,85 @@ function optionalString(value: unknown): string | undefined {
 
 function stringOr(value: unknown, fallback: string): string {
   return optionalString(value) ?? fallback;
+}
+
+// ─────────── HTTP 延迟环形缓冲区（用于计算 P95/P99） ───────────
+
+export function recordHttpLatency(seconds: number): void {
+  HTTP_LATENCY_SAMPLES.push(seconds);
+  if (HTTP_LATENCY_SAMPLES.length > HTTP_LATENCY_MAX_SAMPLES) {
+    HTTP_LATENCY_SAMPLES.shift();
+  }
+}
+
+export function refreshHttpLatencyMetrics(): void {
+  const { registry } = getRuntimeStore();
+
+  if (HTTP_LATENCY_SAMPLES.length > 0) {
+    const sortedValues = [...HTTP_LATENCY_SAMPLES].sort((a, b) => a - b);
+    const p95Index = Math.floor(sortedValues.length * 0.95);
+    const p99Index = Math.floor(sortedValues.length * 0.99);
+
+    registry.set("openclaw_sli_http_request_p95_seconds", sortedValues[p95Index], {
+      help: "HTTP request duration P95 (95th percentile).",
+    });
+    registry.set("openclaw_sli_http_request_p99_seconds", sortedValues[p99Index], {
+      help: "HTTP request duration P99 (99th percentile).",
+    });
+  }
+
+  // ─────────── 环形缓冲区使用率监控 ───────────
+  registry.set("openclaw_http_latency_samples_used", HTTP_LATENCY_SAMPLES.length, {
+    help: "Number of HTTP latency samples in buffer",
+  });
+  registry.set("openclaw_http_latency_samples_usage_ratio", HTTP_LATENCY_SAMPLES.length / HTTP_LATENCY_MAX_SAMPLES, {
+    help: "HTTP latency buffer usage ratio (0~1)",
+  });
+}
+
+export function refreshSliMetrics(): void {
+  const store = getRuntimeStore();
+  const { registry } = store;
+
+  // SLI 1: 消息投递成功率
+  const msgOk = sumSamplesByLabel(registry.getSamplesByName("openclaw_messages_sent_total"), "result", "ok");
+  const msgErr = sumSamplesByLabel(registry.getSamplesByName("openclaw_messages_sent_total"), "result", "error");
+  const msgTotal = msgOk + msgErr;
+  registry.set("openclaw_sli_message_success_ratio", msgTotal > 0 ? msgOk / msgTotal : 1, {
+    help: "Message delivery success ratio (0~1). Source: openclaw_messages_sent_total{result}.",
+  });
+
+  // SLI 2: Agent 错误率
+  const agentFailed = sumSamplesByLabel(registry.getSamplesByName("openclaw_agent_runs_total"), "result", "error");
+  const agentStarted = registry.getSampleValue("openclaw_agent_runs_started_total");
+  registry.set("openclaw_sli_agent_error_ratio", agentStarted > 0 ? agentFailed / agentStarted : 0, {
+    help: "Agent run error ratio (0~1). Source: openclaw_agent_runs_total{result=error} / openclaw_agent_runs_started_total.",
+  });
+
+  // SLI 3: 工具调用错误率
+  const toolFails = registry.getSampleValue("openclaw_tool_call_failures_total");
+  const toolTotal = registry.getSampleValue("openclaw_tool_calls_total");
+  registry.set("openclaw_sli_tool_error_ratio", toolTotal > 0 ? toolFails / toolTotal : 0, {
+    help: "Tool call error ratio (0~1). Source: openclaw_tool_call_failures_total / openclaw_tool_calls_total.",
+  });
+
+  // SLI 4: 渠道健康率（从 rpcSamples 线性查找——RPC 样本量小，可接受）
+  const channelLinked = store.rpcSamples.find((s: any) => s.name === "openclaw_channel_linked_total")?.value ?? 0;
+  const channelTotal = store.rpcSamples.find((s: any) => s.name === "openclaw_channel_total")?.value ?? 0;
+  registry.set("openclaw_sli_channel_health_ratio", channelTotal > 0 ? channelLinked / channelTotal : 1, {
+    help: "Channel health ratio (0~1). Source: openclaw_channel_linked_total / openclaw_channel_total (RPC).",
+  });
+}
+
+function sumSamplesByLabel(
+  samples: Array<{ labels?: Record<string, string>; value: number }>,
+  label: string,
+  expectedValue: string,
+): number {
+  return samples.reduce((sum, sample) => {
+    if (sample.labels?.[label] === expectedValue) {
+      return sum + sample.value;
+    }
+    return sum;
+  }, 0);
 }

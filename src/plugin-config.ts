@@ -11,6 +11,7 @@ export type PrometheusPluginUserConfig = {
   workloadWindowMs?: number;
   includeRuntime?: boolean;
   monitoredProviders?: string[];
+  instance?: string;
   scrapeAuth?: {
     /** 为 true 时要求请求携带 Bearer Token（优先环境变量，见 README） */
     enabled?: boolean;
@@ -30,6 +31,8 @@ export type ResolvedPrometheusConfig = {
   scrapeAuthEnabled: boolean;
   /** 解析后的 token：配置项或环境变量 */
   scrapeBearerToken: string | undefined;
+  /** Instance label for multi-deployment */
+  instance: string;
 };
 
 const ENV_BEARER = "openclaw-prometheus_BEARER_TOKEN";
@@ -81,6 +84,7 @@ export function resolvePrometheusConfig(
     monitoredProviders,
     scrapeAuthEnabled,
     scrapeBearerToken,
+    instance: c.instance ?? "",
   };
 }
 

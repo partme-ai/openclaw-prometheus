@@ -11,6 +11,18 @@ import type { CollectorDiagnostic, MetricDefinition, MetricSample } from "../typ
 export interface JsonMetricsOutput {
   /** 采集时间 */
   timestamp: string;
+  meta?: {
+    rpc?: {
+      initialized: boolean;
+      lastSuccessAt: string | null;
+      lastMethod: string | null;
+      lastError: string | null;
+    };
+    collectors?: {
+      total: number;
+      failed: number;
+    };
+  };
   diagnostics?: CollectorDiagnostic[];
   /** 指标列表 */
   metrics: Array<{
@@ -34,7 +46,8 @@ export interface JsonMetricsOutput {
 export function formatJson(
   definitions: MetricDefinition[],
   samples: MetricSample[],
-  diagnostics: CollectorDiagnostic[] = []
+  diagnostics: CollectorDiagnostic[] = [],
+  meta?: JsonMetricsOutput["meta"],
 ): JsonMetricsOutput {
   // 按指标名分组样本
   const samplesByName = new Map<string, MetricSample[]>();
@@ -46,6 +59,7 @@ export function formatJson(
 
   return {
     timestamp: new Date().toISOString(),
+    ...(meta ? { meta } : {}),
     ...(diagnostics.length > 0 ? { diagnostics } : {}),
     metrics: definitions.map((def) => ({
       name: def.name,

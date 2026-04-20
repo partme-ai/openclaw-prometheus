@@ -21,6 +21,7 @@ describe("assertScrapeAuthorized", () => {
       monitoredProviders: [],
       scrapeAuthEnabled: false,
       scrapeBearerToken: undefined,
+      instance: "test",
     };
     const req = { headers: {} } as IncomingMessage;
     const res = mockRes();
@@ -38,6 +39,7 @@ describe("assertScrapeAuthorized", () => {
       monitoredProviders: [],
       scrapeAuthEnabled: true,
       scrapeBearerToken: undefined,
+      instance: "test",
     };
     const req = { headers: {} } as IncomingMessage;
     const res = mockRes();
@@ -56,6 +58,7 @@ describe("assertScrapeAuthorized", () => {
       monitoredProviders: [],
       scrapeAuthEnabled: true,
       scrapeBearerToken: "secret",
+      instance: "test",
     };
     const req = { headers: { authorization: "Bearer wrong" } } as IncomingMessage;
     const res = mockRes();
@@ -74,6 +77,7 @@ describe("assertScrapeAuthorized", () => {
       monitoredProviders: [],
       scrapeAuthEnabled: true,
       scrapeBearerToken: "ok",
+      instance: "test",
     };
     const req = { headers: { authorization: "Bearer ok" } } as IncomingMessage;
     const res = mockRes();

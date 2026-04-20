@@ -34,42 +34,37 @@ export class PresenceCollector implements MetricCollector {
    */
   async collect(): Promise<MetricSample[]> {
     const samples: MetricSample[] = [];
+    const result = await rpcCall<unknown>("system-presence");
 
-    try {
-      const result = await rpcCall<unknown>("system-presence");
+    // system-presence 可能返回数组或 { entries: [...] } 或 { presence: [...] }
+    let entries: PresenceEntry[] = [];
+    if (Array.isArray(result)) {
+      entries = result;
+    } else if (result && typeof result === "object") {
+      const obj = result as Record<string, unknown>;
+      if (Array.isArray(obj.entries)) entries = obj.entries;
+      else if (Array.isArray(obj.presence)) entries = obj.presence;
+    }
 
-      // system-presence 可能返回数组或 { entries: [...] } 或 { presence: [...] }
-      let entries: PresenceEntry[] = [];
-      if (Array.isArray(result)) {
-        entries = result;
-      } else if (result && typeof result === "object") {
-        const obj = result as Record<string, unknown>;
-        if (Array.isArray(obj.entries)) entries = obj.entries;
-        else if (Array.isArray(obj.presence)) entries = obj.presence;
-      }
+    samples.push({ name: `${PREFIX}_connected_total`, value: entries.length });
 
-      samples.push({ name: `${PREFIX}_connected_total`, value: entries.length });
+    // 按平台
+    const byPlatform: Record<string, number> = {};
+    const byMode: Record<string, number> = {};
 
-      // 按平台
-      const byPlatform: Record<string, number> = {};
-      const byMode: Record<string, number> = {};
+    for (const entry of entries) {
+      const platform = entry.platform ?? "unknown";
+      byPlatform[platform] = (byPlatform[platform] ?? 0) + 1;
 
-      for (const entry of entries) {
-        const platform = entry.platform ?? "unknown";
-        byPlatform[platform] = (byPlatform[platform] ?? 0) + 1;
+      const mode = entry.mode ?? "operator";
+      byMode[mode] = (byMode[mode] ?? 0) + 1;
+    }
 
-        const mode = entry.mode ?? "operator";
-        byMode[mode] = (byMode[mode] ?? 0) + 1;
-      }
-
-      for (const [platform, count] of Object.entries(byPlatform)) {
-        samples.push({ name: `${PREFIX}_by_platform`, labels: { platform }, value: count });
-      }
-      for (const [mode, count] of Object.entries(byMode)) {
-        samples.push({ name: `${PREFIX}_by_mode`, labels: { mode }, value: count });
-      }
-    } catch {
-      samples.push({ name: `${PREFIX}_connected_total`, value: 0 });
+    for (const [platform, count] of Object.entries(byPlatform)) {
+      samples.push({ name: `${PREFIX}_by_platform`, labels: { platform }, value: count });
+    }
+    for (const [mode, count] of Object.entries(byMode)) {
+      samples.push({ name: `${PREFIX}_by_mode`, labels: { mode }, value: count });
     }
 
     return samples;

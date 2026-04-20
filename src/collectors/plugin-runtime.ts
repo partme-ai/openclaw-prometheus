@@ -1,5 +1,5 @@
 import type { MetricCollector, MetricDefinition, MetricSample } from "../types.js";
-import { refreshHousekeepingMetrics, refreshRuntimeSnapshots } from "../observer.js";
+import { refreshHousekeepingMetrics, refreshRuntimeSnapshots, refreshSliMetrics, refreshHttpLatencyMetrics } from "../observer.js";
 import { getRuntimeStore } from "../runtime-store.js";
 
 export class PluginRuntimeCollector implements MetricCollector {
@@ -12,6 +12,8 @@ export class PluginRuntimeCollector implements MetricCollector {
   async collect(): Promise<MetricSample[]> {
     await refreshRuntimeSnapshots(false);
     refreshHousekeepingMetrics();
+    refreshSliMetrics();
+    refreshHttpLatencyMetrics();
     return getRuntimeStore().registry.snapshotSamples();
   }
 }

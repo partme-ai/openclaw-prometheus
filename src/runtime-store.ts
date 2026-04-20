@@ -1,7 +1,7 @@
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
 
 import type { ResolvedPrometheusConfig } from "./plugin-config.js";
-import type { MonitoredProviderSnapshot } from "./types.js";
+import type { MetricSample, MonitoredProviderSnapshot } from "./types.js";
 import { MetricsRegistry } from "./metrics-registry.js";
 
 type ObservedChannelAccount = {
@@ -18,6 +18,12 @@ type RuntimeStoreState = {
   lastSnapshotRefreshAt?: number;
   snapshotError?: string;
   providerSnapshots: MonitoredProviderSnapshot[];
+  /** Latest RPC collector samples (cached for SLI computation) */
+  rpcSamples: MetricSample[];
+  rpcClientInitialized: boolean;
+  lastRpcSuccessAt?: number;
+  lastRpcError?: string;
+  lastRpcMethod?: string;
 };
 
 let state: RuntimeStoreState | null = null;
@@ -30,6 +36,8 @@ export function initializeRuntimeStore(api: OpenClawPluginApi, cfg: ResolvedProm
     startedAt: Date.now(),
     observedChannelAccounts: new Map(),
     providerSnapshots: [],
+    rpcSamples: [],
+    rpcClientInitialized: false,
   };
   return state;
 }
@@ -70,4 +78,29 @@ export function setSnapshotState(params: {
   store.lastSnapshotRefreshAt = params.refreshedAt;
   store.providerSnapshots = params.providerSnapshots;
   store.snapshotError = params.error;
+}
+
+/**
+ * Update the cached RPC collector samples (called after each collectAll).
+ * Used by refreshSliMetrics() to compute channel health SLI.
+ */
+export function updateRpcSamples(samples: MetricSample[]): void {
+  getRuntimeStore().rpcSamples = samples;
+}
+
+export function setRpcClientInitialized(initialized: boolean): void {
+  getRuntimeStore().rpcClientInitialized = initialized;
+}
+
+export function recordRpcSuccess(method: string): void {
+  const store = getRuntimeStore();
+  store.lastRpcMethod = method;
+  store.lastRpcSuccessAt = Date.now();
+  store.lastRpcError = undefined;
+}
+
+export function recordRpcError(method: string, error: unknown): void {
+  const store = getRuntimeStore();
+  store.lastRpcMethod = method;
+  store.lastRpcError = error instanceof Error ? error.message : String(error);
 }

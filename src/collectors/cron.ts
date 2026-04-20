@@ -16,6 +16,14 @@ import type { MetricCollector, MetricDefinition, MetricSample, CronStatus, CronJ
 import { rpcCall } from "../ws-bridge.js";
 
 const PREFIX = "openclaw_cron";
+const CRON_LIST_PARAMS = {
+  includeDisabled: true,
+  limit: 50,
+  offset: 0,
+  enabled: "all",
+  sortBy: "nextRunAtMs",
+  sortDir: "asc",
+} as const;
 
 /**
  * Cron 采集器
@@ -42,7 +50,7 @@ export class CronCollector implements MetricCollector {
   async collect(): Promise<MetricSample[]> {
     const [status, listResult] = await Promise.all([
       rpcCall<CronStatus>("cron.status"),
-      rpcCall<unknown>("cron.list"),
+      rpcCall<unknown>("cron.list", CRON_LIST_PARAMS),
     ]);
     const samples: MetricSample[] = [];
 

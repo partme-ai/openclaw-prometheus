@@ -1,0 +1,519 @@
+# OpenClaw Prometheus 指标定义
+
+> 版本：v0.2.9 | 更新：2026-04-20
+> 遵循 [Prometheus 命名规范](https://prometheus.io/docs/practices/naming/) 与 [Grafana 最佳实践](https://grafana.com/docs/grafana/latest/fundamentals/exemplars/)
+
+---
+
+## 设计原则
+
+1. **命名**：`openclaw_{subsystem}_{metric}_{unit}`，单位后缀统一（`_seconds`、`_bytes`、`_total`、`_total`）
+2. **类型**：counter 用 `_total` 后缀；gauge 无后缀；histogram/summary 用 `_seconds`/`_bytes`
+3. **标签**：低基数优先；`channel`、`provider`、`model`、`agent_id`、`tool` 为常用分组维度
+4. **Grafana 友好**：每个指标族都有对应的 PromQL 模板和推荐面板类型
+
+---
+
+## 1. Exporter 元数据（Plugin Meta）
+
+| 指标 | 类型 | 说明 |
+|------|------|------|
+| `openclaw_exporter_build_info` | gauge | 插件版本信息，labels: `plugin`, `version`。Grafana 用 `group_left` 做 enrich |
+| `openclaw_metrics_last_scrape_duration_seconds` | gauge | 最近一次采集耗时 |
+| `openclaw_metrics_collector_success` | gauge | 采集器健康，labels: `collector`。1=成功 0=失败 |
+| `openclaw_metrics_collect_errors_total` | counter | 采集器累计失败次数，labels: `collector` |
+| `openclaw_metrics_http_requests_total` | counter | HTTP 端点请求计数，labels: `route`, `method`, `status` |
+| HTTP 端点延迟 | histogram | `route`, `method` | 支持 `histogram_quantile` 跨实例聚合 |
+| `openclaw_gateway_operator_rpc_requests_total` | counter | Gateway RPC 调用计数，labels: `method` |
+| `openclaw_plugin_uptime_seconds` | gauge | 插件运行时长 |
+| `openclaw_plugin_hook_invocations_total` | counter | Hook 调用次数，labels: `hook` |
+
+**Grafana 面板建议**：
+- Stat Panel：`openclaw_exporter_build_info` 显示版本
+- Time series：`rate(openclaw_metrics_http_requests_total[5m])` 按 route 分组
+- Stat：`openclaw_metrics_last_scrape_duration_seconds` 监控采集性能
+
+---
+
+## 2. Gateway 健康（Health RPC）
+
+来源：`health` RPC
+
+| 指标 | 类型 | 标签 | 说明 |
+|------|------|------|------|
+| `openclaw_up` | gauge | - | Gateway 健康 1=ok 0=error |
+| `openclaw_health_check_duration_seconds` | gauge | - | 健康检查耗时（秒） |
+| `openclaw_uptime_seconds` | gauge | - | Gateway 运行时长 |
+| `openclaw_heartbeat_interval_seconds` | gauge | - | 心跳间隔 |
+| `openclaw_agents_configured_total` | gauge | - | 已配置 agent 数量 |
+| `openclaw_sessions_count` | gauge | - | 会话总数（health 快照） |
+| `openclaw_channels_total` | gauge | - | 渠道总数 |
+| `openclaw_channels_linked_total` | gauge | - | 已链接渠道数 |
+| `openclaw_channel_linked` | gauge | `channel_id`, `channel_label` | 单渠道链接状态 0/1 |
+
+**Grafana 面板建议**：
+- **Stat**：`openclaw_up` → 绿/红
+- **Gauge**：`openclaw_agents_configured_total`
+- **Bar gauge**：`openclaw_channel_linked` 按 channel_id 分组
+
+---
+
+## 3. 渠道（Channels RPC）
+
+来源：`channels.status` RPC
+
+| 指标 | 类型 | 标签 | 说明 |
+|------|------|------|------|
+| `openclaw_channel_total` | gauge | - | 配置渠道总数 |
+| `openclaw_channel_linked_total` | gauge | - | 已链接渠道数 |
+| `openclaw_channel_unlinked_total` | gauge | - | 未链接渠道数 |
+| `openclaw_channel_linked` | gauge | `channel_id`, `channel_type`, `channel_label` | 单渠道链接状态 |
+| `openclaw_channel_accounts` | gauge | `channel_id` | 每渠道账号数 |
+| `openclaw_channel_last_event_timestamp_seconds` | gauge | `channel`, `account` | 最近事件时间戳 |
+| `openclaw_channel_last_inbound_age_seconds` | gauge | `channel`, `account` | 最近入站消息距今秒数 |
+| `openclaw_channel_last_outbound_age_seconds` | gauge | `channel`, `account` | 最近出站消息距今秒数 |
+| `openclaw_channel_failures_total` | counter | `channel`, `reason` | 渠道发送失败数 |
+
+**Grafana 面板建议**：
+- **Table**：`openclaw_channel_linked` + `openclaw_channel_accounts` → 渠道状态一览
+- **Time series**：`time() - openclaw_channel_last_event_timestamp_seconds` → 渠道活跃度
+
+---
+
+## 4. 会话（Sessions RPC + Hooks）
+
+来源：`sessions.list` RPC + `session_start/end` hooks
+
+| 指标 | 类型 | 标签 | 说明 |
+|------|------|------|------|
+| `openclaw_session_total` | gauge | - | 会话总数 |
+| `openclaw_session_active_recent` | gauge | - | 最近 30 分钟活跃会话 |
+| `openclaw_session_by_channel` | gauge | `channel` | 按渠道分会话数 |
+| `openclaw_session_tokens_input_total` | gauge | - | 累计 input tokens |
+| `openclaw_session_tokens_output_total` | gauge | - | 累计 output tokens |
+| `openclaw_session_tokens_total` | gauge | - | 累计总 tokens |
+| `openclaw_session_tokens_context_total` | gauge | - | 累计 context tokens |
+| `openclaw_session_estimated_cost_usd_total` | gauge | - | 预估总成本 (USD) |
+| `openclaw_session_tokens_avg_per_session` | gauge | - | 平均每会话 tokens |
+| `openclaw_session_tokens_max_per_session` | gauge | - | 单会话最大 tokens |
+| `openclaw_sessions_started_total` | counter | - | Hook: 会话启动计数 |
+| `openclaw_sessions_ended_total` | counter | `reason` | Hook: 会话结束计数 |
+| `openclaw_sessions_active_estimated` | gauge | - | Hook: 估计活跃会话 |
+
+**Grafana 面板建议**：
+- **Time series**：`openclaw_session_total` → 会话增长趋势
+- **Pie chart**：`openclaw_session_by_channel` → 渠道分布
+- **Stat**：`openclaw_session_estimated_cost_usd_total` → 成本概览
+
+---
+
+## 5. 用量统计（Usage RPC）
+
+来源：`usage.cost` + `sessions.usage` RPC
+
+### 5.1 总量指标
+
+| 指标 | 类型 | 说明 |
+|------|------|------|
+| `openclaw_usage_requests_total` | gauge | 请求计数 |
+| `openclaw_usage_tokens_input_total` | gauge | Input tokens |
+| `openclaw_usage_tokens_output_total` | gauge | Output tokens |
+| `openclaw_usage_tokens_cache_read_total` | gauge | Cache read tokens |
+| `openclaw_usage_tokens_cache_write_total` | gauge | Cache write tokens |
+| `openclaw_usage_tokens_total` | gauge | 总 tokens |
+| `openclaw_usage_cost_usd_total` | gauge | 总成本 USD |
+| `openclaw_usage_missing_cost_entries_total` | gauge | 缺失成本条目 |
+
+### 5.2 消息指标
+
+| 指标 | 类型 | 说明 |
+|------|------|------|
+| `openclaw_usage_messages_total` | gauge | 消息总数 |
+| `openclaw_usage_messages_user_total` | gauge | 用户消息 |
+| `openclaw_usage_messages_assistant_total` | gauge | 助手消息 |
+| `openclaw_usage_messages_tool_calls_total` | gauge | 工具调用消息 |
+| `openclaw_usage_messages_tool_results_total` | gauge | 工具结果消息 |
+| `openclaw_usage_messages_errors_total` | gauge | 错误消息 |
+
+### 5.3 延迟指标
+
+| 指标 | 类型 | 说明 |
+|------|------|------|
+| `openclaw_usage_latency_count` | gauge | 延迟样本数 |
+| `openclaw_usage_latency_avg_seconds` | gauge | 平均延迟 |
+| `openclaw_usage_latency_p95_seconds` | gauge | P95 延迟 |
+| `openclaw_usage_latency_min_seconds` | gauge | 最小延迟 |
+| `openclaw_usage_latency_max_seconds` | gauge | 最大延迟 |
+
+### 5.4 按 Provider/Model/Agent/Channel/Tool 分组
+
+| 指标 | 标签 | 说明 |
+|------|------|------|
+| `openclaw_usage_provider_requests_total` | `provider` | 按 provider 请求 |
+| `openclaw_usage_provider_tokens_input_total` | `provider` | 按 provider input |
+| `openclaw_usage_provider_tokens_output_total` | `provider` | 按 provider output |
+| `openclaw_usage_provider_tokens_cache_read_total` | `provider` | 按 provider cache read |
+| `openclaw_usage_provider_tokens_cache_write_total` | `provider` | 按 provider cache write |
+| `openclaw_usage_provider_tokens_total` | `provider` | 按 provider 总 tokens |
+| `openclaw_usage_provider_cost_usd_total` | `provider` | 按 provider 成本 |
+| `openclaw_usage_model_requests_total` | `provider`, `model` | 按 model 请求 |
+| `openclaw_usage_model_tokens_total` | `provider`, `model` | 按 model tokens |
+| `openclaw_usage_model_cost_usd_total` | `provider`, `model` | 按 model 成本 |
+| `openclaw_usage_agent_tokens_total` | `agent_id` | 按 agent tokens |
+| `openclaw_usage_agent_cost_usd_total` | `agent_id` | 按 agent 成本 |
+| `openclaw_usage_channel_tokens_total` | `channel` | 按 channel tokens |
+| `openclaw_usage_channel_cost_usd_total` | `channel` | 按 channel 成本 |
+| `openclaw_usage_tool_calls_total` | `tool` | 按 tool 调用数 |
+| `openclaw_usage_tools_total_calls` | - | 总 tool 调用 |
+| `openclaw_usage_tools_unique_total` | - | 去重 tool 数 |
+
+### 5.5 按日聚合（Trend）
+
+| 指标 | 标签 | 说明 |
+|------|------|------|
+| `openclaw_usage_daily_tokens_total` | `date` | 日 tokens |
+| `openclaw_usage_daily_cost_usd_total` | `date` | 日成本 |
+| `openclaw_usage_daily_messages_total` | `date` | 日消息数 |
+| `openclaw_usage_daily_tool_calls_total` | `date` | 日 tool 调用 |
+| `openclaw_usage_daily_errors_total` | `date` | 日错误数 |
+| `openclaw_usage_daily_latency_count` | `date` | 日延迟样本 |
+| `openclaw_usage_daily_latency_avg_seconds` | `date` | 日平均延迟 |
+| `openclaw_usage_daily_latency_p95_seconds` | `date` | 日 P95 延迟 |
+| `openclaw_usage_model_daily_requests_total` | `date`, `provider`, `model` | 按 model 按日请求 |
+| `openclaw_usage_model_daily_tokens_total` | `date`, `provider`, `model` | 按 model 按日 tokens |
+| `openclaw_usage_model_daily_cost_usd_total` | `date`, `provider`, `model` | 按 model 按日成本 |
+
+**Grafana 面板建议**：
+- **Bar chart**：`openclaw_usage_daily_cost_usd_total` → 日成本趋势
+- **Heatmap**：`openclaw_usage_daily_latency_p95_seconds` → 延迟热力图
+- **Treemap**：`openclaw_usage_provider_cost_usd_total` → provider 成本占比
+
+---
+
+## 6. Token 实时消耗（Hooks）
+
+来源：`llm_output` hook（实时累加，与 usage RPC 的窗口聚合互补）
+
+> ⚠️ 与 usage RPC 指标（`openclaw_usage_tokens_*`）区分：Hook 实时指标用 `openclaw_model_llm_tokens_*` 前缀，类型为 counter，可做 `rate()` 聚合。
+
+| 指标 | 类型 | 标签 | 说明 |
+|------|------|------|------|
+| `openclaw_model_llm_tokens_input_total` | counter | `provider`, `model` | 实时 input tokens |
+| `openclaw_model_llm_tokens_output_total` | counter | `provider`, `model` | 实时 output tokens |
+| `openclaw_model_llm_tokens_cache_read_total` | counter | `provider`, `model` | 实时 cache read |
+| `openclaw_model_llm_tokens_cache_write_total` | counter | `provider`, `model` | 实时 cache write |
+| `openclaw_model_llm_tokens_total` | counter | `provider`, `model` | 实时总 tokens |
+| `openclaw_model_llm_input_images_total` | counter | `provider`, `model` | 图片输入数 |
+
+**Grafana PromQL**：`rate(openclaw_model_llm_tokens_input_total[5m])` → token/s 吞吐
+
+---
+
+## 7. 消息实时（Hooks）
+
+来源：`message_received` / `message_sent` hooks
+
+| 指标 | 类型 | 标签 | 说明 |
+|------|------|------|------|
+| `openclaw_session_messages_received_total` | counter | `channel` | 入站消息 |
+| `openclaw_session_messages_sent_total` | counter | `channel`, `result` | 出站消息 (result: ok/error) |
+
+**Grafana**：`rate(openclaw_session_messages_received_total[5m])` 按 channel 分组
+
+---
+
+## 8. 工具调用（Hooks）
+
+来源：`before_tool_call` / `after_tool_call` hooks
+
+| 指标 | 类型 | 标签 | 说明 |
+|------|------|------|------|
+| `openclaw_tool_calls_total` | counter | `tool` | 工具调用计数 |
+| `openclaw_tool_call_failures_total` | counter | `tool` | 工具调用失败 |
+| `openclaw_tool_call_duration_seconds` | histogram | `tool` | 工具调用延迟（bucket 分布） |
+| `openclaw_tool_result_persist_total` | counter | - | 工具结果持久化 |
+
+**Grafana**：Top 10 工具 `topk(10, rate(openclaw_tool_calls_total[5m]))`
+
+---
+
+## 9. Agent 运行（Hooks + Events）
+
+来源：`before_agent_start` / `agent_end` hooks + `onAgentEvent` events
+
+| 指标 | 类型 | 标签 | 说明 |
+|------|------|------|------|
+| `openclaw_agent_runs_started_total` | counter | `agent_id`, `channel` | Agent 启动 |
+| `openclaw_agent_runs_total` | counter | `agent_id`, `result` | Agent 完成（result: ok/error） |
+| `openclaw_agent_runs_failed_total` | counter | `agent_id` | Agent 失败次数（用于 Grafana SLO 关联） |
+| `openclaw_agent_run_duration_seconds` | histogram | `agent_id` | Agent 运行时长（16 档 buckets）；无 result 标签避免 cardinality 爆炸 |
+| `openclaw_agent_events_total` | counter | `stream` | Agent 事件流 |
+| `openclaw_agent_item_events_total` | counter | `kind`, `phase`, `status` | Agent 子事件 |
+
+**Grafana**：
+- 延迟分布：`histogram_quantile(0.95, sum(rate(openclaw_agent_run_duration_seconds_bucket[5m])) by (le, agent_id))`
+- 工具延迟：`histogram_quantile(0.95, sum(rate(openclaw_tool_call_duration_seconds_bucket[5m])) by (le, tool))`
+
+---
+
+## 10. 模型（Models RPC）
+
+来源：`models.list` RPC
+
+| 指标 | 类型 | 标签 | 说明 |
+|------|------|------|------|
+| `openclaw_model_total` | gauge | - | 可用模型总数 |
+| `openclaw_model_by_provider` | gauge | `provider` | 按 provider 模型数 |
+
+---
+
+## 11. 模型认证（Model Auth RPC + Runtime）
+
+来源：`models.authStatus` RPC + `api.runtime.modelAuth`
+
+| 指标 | 类型 | 标签 | 说明 |
+|------|------|------|------|
+| `openclaw_model_auth_providers_total` | gauge | - | 认证 provider 总数 |
+| `openclaw_model_auth_providers_expiring_total` | gauge | - | 即将过期数 |
+| `openclaw_model_auth_providers_expired_total` | gauge | - | 已过期/缺失数 |
+| `openclaw_model_auth_provider_status` | gauge | `provider`, `status` | 单 provider 状态 one-hot |
+| `openclaw_model_auth_provider_profiles_total` | gauge | `provider` | 认证 profile 数 |
+| `openclaw_model_auth_provider_expiry_timestamp_seconds` | gauge | `provider` | 过期时间戳 |
+| `openclaw_model_auth_provider_remaining_seconds` | gauge | `provider` | 剩余有效秒数 |
+| `openclaw_model_auth_provider_usage_used_ratio` | gauge | `provider` | 用量占比 0-1 |
+| `openclaw_model_auth_provider_usage_remaining_ratio` | gauge | `provider` | 剩余占比 0-1 |
+| `openclaw_model_auth_provider_usage_reset_timestamp_seconds` | gauge | `provider` | 用量重置时间戳 |
+| `openclaw_model_auth_provider_info` | gauge | `provider`, `source`, `mode` | Provider 认证来源信息 |
+| `openclaw_model_auth_provider_probe_errors_total` | counter | `provider` | 探测失败数 |
+
+**Grafana**：
+- **Alert**：`openclaw_model_auth_provider_remaining_seconds < 86400` → 认证即将过期
+- **Stat**：`openclaw_model_auth_provider_usage_used_ratio` → 用量仪表盘
+
+---
+
+## 12. 节点（Nodes RPC）
+
+来源：`node.list` RPC
+
+| 指标 | 类型 | 标签 | 说明 |
+|------|------|------|------|
+| `openclaw_node_total` | gauge | - | 配对节点总数 |
+| `openclaw_node_connected_total` | gauge | - | 当前在线节点 |
+| `openclaw_node_by_platform` | gauge | `platform` | 按平台分布 |
+
+---
+
+## 13. 在线状态（Presence RPC）
+
+来源：`system-presence` RPC
+
+| 指标 | 类型 | 标签 | 说明 |
+|------|------|------|------|
+| `openclaw_presence_connected_total` | gauge | - | 在线客户端总数 |
+| `openclaw_presence_by_platform` | gauge | `platform` | 按平台分布 |
+| `openclaw_presence_by_mode` | gauge | `mode` | 按角色 (operator/node) |
+
+---
+
+## 14. 技能（Skills RPC）
+
+来源：`skills.status` + `skills.bins` RPC
+
+| 指标 | 类型 | 说明 |
+|------|------|------|
+| `openclaw_skill_total` | gauge | 注册 skill 总数 |
+| `openclaw_skill_bins_total` | gauge | 已安装二进制数 |
+| `openclaw_skill_enabled_total` | gauge | 启用 skill 数 |
+| `openclaw_skill_disabled_total` | gauge | 禁用 skill 数 |
+| `openclaw_skill_eligible_total` | gauge | 合格 skill 数 |
+| `openclaw_skill_blocked_total` | gauge | 被白名单阻止数 |
+
+---
+
+## 15. 定时任务（Cron RPC）
+
+来源：`cron.status` + `cron.list` RPC
+
+| 指标 | 类型 | 说明 |
+|------|------|------|
+| `openclaw_cron_scheduler_enabled` | gauge | 调度器启用 0/1 |
+| `openclaw_cron_jobs_total` | gauge | 任务总数 |
+| `openclaw_cron_jobs_enabled` | gauge | 启用任务数 |
+| `openclaw_cron_jobs_disabled` | gauge | 禁用任务数 |
+| `openclaw_cron_jobs_errors_total` | gauge | 上次执行失败数 |
+| `openclaw_cron_jobs_running_total` | gauge | 当前运行中 |
+| `openclaw_cron_next_wake_in_seconds` | gauge | 距下次唤醒秒数 |
+| `openclaw_cron_next_run_in_seconds` | gauge | 距最近下次执行秒数 |
+
+---
+
+## 16. 会话压缩（Hooks）
+
+来源：`before_compaction` / `after_compaction` hooks
+
+| 指标 | 类型 | 标签 | 说明 |
+|------|------|------|------|
+| `openclaw_session_compaction_events_total` | counter | `phase` (before/after) | 压缩事件 |
+| `openclaw_session_compaction_messages_compacted_total` | counter | - | 压缩消息数 |
+| `openclaw_session_compaction_last_tokens_before` | gauge | - | 压缩前 tokens |
+| `openclaw_session_compaction_last_tokens_after` | gauge | - | 压缩后 tokens |
+
+**Grafana**：压缩率 = `before / after`
+
+---
+
+## 17. 子智能体（Hooks）
+
+来源：`subagent_spawning` / `subagent_ended` hooks
+
+| 指标 | 类型 | 标签 | 说明 |
+|------|------|------|------|
+| `openclaw_agent_subagent_ended_total` | counter | `status` (ok/error/timeout) | 子智能体完成 |
+
+---
+
+## 18. 会话事件（Runtime Events）
+
+来源：`onSessionTranscriptUpdate` / `onAgentEvent`
+
+| 指标 | 类型 | 标签 | 说明 |
+|------|------|------|------|
+| `openclaw_session_transcript_updates_total` | counter | - | Transcript 更新计数 |
+| `openclaw_session_transcript_last_update_timestamp_seconds` | gauge | `session_key` | 最近 transcript 更新 |
+| `openclaw_session_transcript_last_seen_timestamp_seconds` | gauge | `scope` | 聚合级最近更新 |
+| `openclaw_session_reset_requests_total` | counter | `reason` | 会话重置请求 |
+
+---
+
+## 19. 在途操作（Hooks）
+
+| 指标 | 类型 | 标签 | 说明 |
+|------|------|------|------|
+| `openclaw_inflight_operations` | gauge | `kind` (agent/tool) | 当前进行中操作估计 |
+
+---
+
+## 20. Runtime 命名空间（Plugin Runtime）
+
+| 指标 | 类型 | 标签 | 说明 |
+|------|------|------|------|
+| `openclaw_runtime_namespace_available` | gauge | `namespace` | API namespace 可用性 0/1 |
+| `openclaw_runtime_snapshot_age_seconds` | gauge | - | 快照数据新鲜度 |
+| `openclaw_runtime_snapshot_refresh_timestamp_seconds` | gauge | - | 快照刷新时间戳 |
+| `openclaw_runtime_state_dir_configured` | gauge | - | state dir 是否可用 |
+| `openclaw_up` | gauge | - | 插件就绪 (gateway_start 触发) |
+
+---
+
+## 21. Node.js 进程（可选）
+
+来源：`RuntimeCollector`（`includeRuntime: true` 时启用）
+
+| 指标 | 类型 | 说明 |
+|------|------|------|
+| `openclaw_nodejs_heap_used_bytes` | gauge | 堆已用 |
+| `openclaw_nodejs_heap_total_bytes` | gauge | 堆总量 |
+| `openclaw_nodejs_external_bytes` | gauge | 外部内存 |
+| `openclaw_nodejs_array_buffers_bytes` | gauge | ArrayBuffer 内存 |
+| `openclaw_nodejs_rss_bytes` | gauge | 常驻内存 |
+| `openclaw_nodejs_event_loop_lag_ms` | gauge | 事件循环延迟 |
+| `openclaw_nodejs_uptime_seconds` | gauge | 进程运行时长 |
+| `openclaw_nodejs_process_cpu_user_seconds_total` | counter | 用户态 CPU |
+| `openclaw_nodejs_process_cpu_system_seconds_total` | counter | 内核态 CPU |
+
+---
+
+## 指标统计
+
+| 族 | 指标数 | 来源 |
+|----|--------|------|
+| Exporter Meta | 9 | Plugin |
+| Gateway Health | 9 | RPC |
+| Channels | 9 | RPC + Hooks |
+| Sessions | 13 | RPC + Hooks |
+| Usage | ~51 | RPC (含 multi-dimension) |
+| Tokens (实时) | 6 | Hooks |
+| Messages (实时) | 2 | Hooks |
+| Tool Calls | 4 | Hooks |
+| Agent | 5 | Hooks + Events |
+| Models | 2 | RPC |
+| Model Auth | 12 | RPC + Runtime |
+| Nodes | 3 | RPC |
+| Presence | 3 | RPC |
+| Skills | 6 | RPC |
+| Cron | 8 | RPC |
+| Compaction | 4 | Hooks |
+| Subagent | 1 | Hooks |
+| Runtime | 5 | Plugin |
+| Node.js | 9 | Process |
+| **合计** | **~165** | |
+
+---
+
+## 22. SLI 衍生指标（Derived）
+
+来源：PluginRuntimeCollector 周期计算
+
+| 指标 | 类型 | 说明 |
+|------|------|------|
+| `openclaw_sli_message_success_ratio` | gauge | 消息投递成功率 0-1 |
+| `openclaw_sli_agent_error_ratio` | gauge | Agent 运行错误率 0-1 |
+| `openclaw_sli_tool_error_ratio` | gauge | 工具调用错误率 0-1 |
+| `openclaw_sli_channel_health_ratio` | gauge | 渠道健康比率 0-1 |
+
+**Grafana SLO Dashboard**：
+- Error Budget: `1 - openclaw_sli_agent_error_ratio`
+- Burn Rate: `rate(openclaw_sli_agent_error_ratio[1h]) / (1 - 0.999)`
+
+---
+
+## 变更日志
+
+### v0.3.0 优化
+
+| 变更 | Before | After |
+|------|--------|-------|
+| 延迟类型 | summary | **histogram**（可跨实例 `histogram_quantile`） |
+| Hook token 前缀 | `openclaw_usage_tokens_*` | **`openclaw_model_llm_tokens_*`**（与 RPC 聚合指标区分） |
+| 健康检查单位 | `_duration_ms` (ms) | **`_duration_seconds`** (s) |
+| SLI 指标 | 无 | **新增 4 个** `openclaw_sli_*` |
+| Histogram buckets | N/A | **16 档** 5ms~600s |
+| HTTP 延迟 | summary | **histogram** |
+| Agent duration histogram | 含 `result` 标签（cardinality 爆炸） | **移除 `result` 标签**，新增 `openclaw_agent_runs_failed_total{agent_id}` 独立记录失败次数 |
+
+---
+
+## 推荐告警规则
+
+```yaml
+# Gateway 宕机
+- alert: OpenClawGatewayDown
+  expr: openclaw_up == 0
+  for: 2m
+
+# 认证即将过期
+- alert: OpenClawModelAuthExpiring
+  expr: openclaw_model_auth_provider_remaining_seconds < 86400
+  for: 5m
+
+# 渠道断开
+- alert: OpenClawChannelDisconnected
+  expr: openclaw_channel_linked == 0
+  for: 5m
+
+# 采集器失败
+- alert: OpenClawCollectorFailing
+  expr: openclaw_metrics_collector_success == 0
+  for: 10m
+
+# 会话成本异常
+- alert: OpenClawCostSpike
+  expr: rate(openclaw_usage_cost_usd_total[1h]) > 10
+  for: 30m
+
+# Agent 错误率高
+- alert: OpenClawAgentErrorRateHigh
+  expr: rate(openclaw_agent_runs_total{status="error"}[5m]) / rate(openclaw_agent_runs_total[5m]) > 0.1
+  for: 10m
+```

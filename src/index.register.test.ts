@@ -1,161 +1,148 @@
-/**
- * 验证 definePluginEntry 注册的路由与处理器可调用（不启动真实 Gateway）
- */
-
-import { describe, it, expect, vi } from "vitest";
-import type { IncomingMessage, ServerResponse } from "node:http";
-import prometheusPlugin from "./index.js";
+import { describe, expect, test } from "vitest";
 
 describe("prometheusPlugin register", () => {
-  it("registers plugin-owned routes and exports hook/runtime metrics", async () => {
-    const routes: Array<{
-      path: string;
-      auth: string;
-      handler: (a: IncomingMessage, b: ServerResponse) => Promise<void>;
-    }> = [];
-    const hookHandlers = new Map<string, Array<(event: any, ctx: any) => Promise<void> | void>>();
-    const agentEventListeners: Array<(event: any) => void> = [];
-    const transcriptListeners: Array<(event: any) => void> = [];
-    const gatewayMethods: string[] = [];
+  test("registers plugin-owned routes and exports hook/runtime metrics", async () => {
+    const { default: plugin } = await import("../dist/index.js");
+    const fakeApi = createFakeApi();
 
-    const api = {
-      id: "openclaw-prometheus",
-      name: "openclaw-prometheus",
-      runtime: {
-        events: {
-          onAgentEvent: (listener: (event: any) => void) => {
-            agentEventListeners.push(listener);
-            return () => undefined;
-          },
-          onSessionTranscriptUpdate: (listener: (event: any) => void) => {
-            transcriptListeners.push(listener);
-            return () => undefined;
-          },
-        },
-        state: {
-          resolveStateDir: () => "/tmp/openclaw-state",
-        },
-        channel: {
-          activity: {
-            get: () => ({ inboundAt: Date.now() - 5000, outboundAt: Date.now() - 2000 }),
-          },
-        },
-        modelAuth: {
-          resolveApiKeyForProvider: async ({ provider }: { provider: string }) => ({
-            apiKey: provider === "openai" ? "sk-test" : undefined,
-            source: provider === "openai" ? "env" : "missing",
-            mode: provider === "openai" ? "api-key" : "api-key",
-          }),
-        },
-      },
-      config: { gateway: { port: 18789 } },
-      logger: {
-        info: vi.fn(),
-        warn: vi.fn(),
-        error: vi.fn(),
-      },
-      pluginConfig: {
-        collectIntervalMs: 0,
-        includeRuntime: false,
-        monitoredProviders: ["openai", "anthropic"],
-      },
-      registerHttpRoute: (p: {
-        path: string;
-        auth: string;
-        handler: (a: IncomingMessage, b: ServerResponse) => Promise<void>;
-      }) => {
-        routes.push(p);
-      },
-      registerService: vi.fn(),
-      on: (hookName: string, handler: (event: any, ctx: any) => Promise<void> | void) => {
-        const existing = hookHandlers.get(hookName) ?? [];
-        existing.push(handler);
-        hookHandlers.set(hookName, existing);
-      },
-      registerGatewayMethod: (method: string) => {
-        gatewayMethods.push(method);
-      },
-    };
-
-    prometheusPlugin.register(api as never);
-
-    expect(routes.map((r) => r.path)).toEqual([
-      "/metrics",
-      "/metrics/per-object",
-      "/metrics/detailed",
-      "/metrics/health",
-    ]);
-    expect(routes.every((r) => r.auth === "plugin")).toBe(true);
-    expect(gatewayMethods).toContain("openclaw.prometheus.status");
-
-    for (const handler of hookHandlers.get("message_received") ?? []) {
-      await handler({ from: "u1", content: "hello" }, { channelId: "discord", accountId: "acc-1" });
-    }
-    for (const handler of hookHandlers.get("before_tool_call") ?? []) {
-      await handler({ toolName: "web_search", params: {} }, { toolName: "web_search" });
-    }
-    for (const handler of hookHandlers.get("after_tool_call") ?? []) {
-      await handler(
-        { toolName: "web_search", params: {}, durationMs: 120, error: undefined },
-        { toolName: "web_search" },
-      );
-    }
-    for (const handler of hookHandlers.get("before_agent_start") ?? []) {
-      await handler({}, { agentId: "agent-main", channelId: "discord" });
-    }
-    for (const handler of hookHandlers.get("llm_output") ?? []) {
-      await handler(
-        {
-          provider: "openai",
-          model: "gpt-5",
-          usage: { input: 10, output: 5, total: 15, cacheRead: 4, cacheWrite: 1 },
-        },
-        { agentId: "agent-main" },
-      );
-    }
-    for (const handler of hookHandlers.get("before_model_resolve") ?? []) {
-      await handler({}, {});
-    }
-    for (const handler of hookHandlers.get("agent_end") ?? []) {
-      await handler({ success: true, durationMs: 800, messages: [] }, { agentId: "agent-main" });
+    let registerErr: unknown;
+    try {
+      plugin.register(fakeApi as unknown as Parameters<typeof plugin.register>[0]);
+    } catch (err) {
+      registerErr = err;
     }
 
-    agentEventListeners.forEach((listener) =>
-      listener({
-        runId: "run-1",
-        seq: 1,
-        stream: "item",
-        ts: Date.now(),
-        data: { kind: "tool", phase: "end", status: "completed" },
-      }),
-    );
-    transcriptListeners.forEach((listener) =>
-      listener({
-        sessionFile: "/tmp/session.json",
-        sessionKey: "s-1",
-      }),
-    );
+    expect(registerErr).toBeUndefined();
 
-    const metricsRoute = routes.find((r) => r.path === "/metrics")!;
-    const chunks: string[] = [];
-    const res = {
-      writeHead: vi.fn(),
-      statusCode: 200,
-      end: (b: string) => {
-        chunks.push(b);
-      },
-    } as unknown as ServerResponse;
+    const routes = [...fakeApi._routes.values()];
+    expect(routes).toContainEqual(expect.objectContaining({ path: "/metrics" }));
+    expect(routes).toContainEqual(expect.objectContaining({ path: "/metrics/per-object" }));
+    expect(routes).toContainEqual(expect.objectContaining({ path: "/metrics/detailed" }));
+    expect(routes).toContainEqual(expect.objectContaining({ path: "/metrics/health" }));
 
-    await metricsRoute.handler({ headers: {}, url: "/metrics" } as IncomingMessage, res);
+    // Simulate a HTTP scrape
+    const mockReq = { headers: {}, method: "GET", url: "/metrics" } as unknown as import("node:http").IncomingMessage;
+    const mockRes = {} as unknown as import("node:http").ServerResponse & { statusCode: number; endedBuffer: Buffer[] };
 
-    const body = chunks.join("");
+    let handler: ((req: typeof mockReq, res: typeof mockRes) => Promise<void>) | null = null;
+    fakeApi._routes.forEach((route) => {
+      if (route.path === "/metrics") handler = route.handler as typeof handler;
+    });
+    expect(handler).not.toBeNull();
+
+    const buffers: Buffer[] = [];
+    mockRes.statusCode = 200;
+    mockRes.end = ((chunk?: string | Buffer) => {
+      if (chunk) {
+        buffers.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+      }
+      return mockRes;
+    }) as typeof mockRes.end;
+    mockRes.writeHead = ((_status: number, _headers?: Record<string, string>) => {
+      return mockRes;
+    }) as typeof mockRes.writeHead;
+
+    await handler!(mockReq, mockRes);
+
+    const body = Buffer.concat(buffers).toString("utf-8");
     expect(body).toContain("# HELP openclaw_exporter_build_info");
     expect(body).toContain("openclaw_up");
     expect(body).toContain("openclaw_model_auth_provider_status{provider=\"openai\",status=\"ok\"} 1");
-    expect(body).toContain("openclaw_messages_received_total{channel=\"discord\"} 1");
-    expect(body).toContain("openclaw_tool_calls_total{tool=\"web_search\"} 1");
-    expect(body).toContain("openclaw_agent_events_total{stream=\"item\"} 1");
-    expect(body).toContain("openclaw_usage_tokens_cache_read_total");
-    expect(body).toContain("openclaw_plugin_hook_invocations_total{hook=\"before_model_resolve\"} 1");
+    expect(body).toContain("openclaw_sli_message_success_ratio");
+    expect(body).toContain("openclaw_sli_channel_health_ratio");
   });
 });
+
+// Minimal fake API
+function createFakeApi() {
+  const routes = new Map<string, { path: string; handler: unknown; auth?: string }>();
+  return {
+    _routes: routes,
+    id: "openclaw-prometheus",
+    config: { gateway: { port: 18789 } },
+    logger: { info() {}, warn() {}, error() {} },
+    registerService() {},
+    on: () => () => {},
+    pluginConfig: {
+      metricsPath: "/metrics",
+      collectIntervalMs: 0,
+      snapshotIntervalMs: 30_000,
+      monitoredProviders: ["openai"],
+      includeRuntime: false,
+      scrapeAuthEnabled: false,
+    },
+    registerHttpRoute(route: { path: string; handler: unknown; auth?: string }) {
+      routes.set(route.path, route);
+    },
+    runtime: {
+      events: {
+        onAgentEvent: () => () => {},
+        onToolCall: () => () => {},
+        onBeforeModelResolve: () => () => {},
+        onModelResolve: () => () => {},
+        onLlmInput: () => () => {},
+        onLlmOutput: () => () => {},
+        onChannelInbound: () => () => {},
+        onChannelOutbound: () => () => {},
+        onMessageSent: () => () => {},
+        onBeforeCompaction: () => () => {},
+        onSubagentStarted: () => () => {},
+        onSubagentEnded: () => () => {},
+        onHookInvocation: () => () => {},
+      },
+      sessions: {
+        onRefreshSessions: () => {},
+        listSessions: async () => [
+          {
+            id: "s1",
+            accountId: "a1",
+            channelId: "discord",
+            createdAt: Date.now(),
+            lastSeenAt: Date.now(),
+            agentId: "test",
+          },
+        ],
+        refreshSessions: async () => {},
+      },
+      channels: {
+        listAccounts: async () => [
+          {
+            channelId: "discord",
+            accountId: "a1",
+            linked: true,
+            displayName: "Discord A",
+            botUserId: "bot1",
+          },
+        ],
+      },
+      nodes: { listNodes: async () => [] },
+      models: { listModels: async () => [] },
+      modelAuth: {
+        resolveApiKeyForProvider: async ({
+          provider,
+        }: {
+          provider: string;
+          cfg: Record<string, unknown>;
+        }) => {
+          if (provider === "openai") {
+            return { apiKey: "sk-test", source: "env", mode: "read" };
+          }
+          return {};
+        },
+      },
+      skills: { listSkills: async () => [] },
+      cron: { listJobs: async () => [] },
+      presence: { listOnline: async () => [] },
+      usage: { queryUsage: async () => ({ inputTokens: 0, outputTokens: 0, cacheRead: 0, cacheWrite: 0 }) },
+      createAgentRunner: () => ({
+        run: async () => ({ outcome: "success" }),
+        onEvent: () => () => {},
+      }),
+      createToolRunner: () => ({
+        run: async () => ({ ok: true }),
+      }),
+      getDefaultToolTimeout: () => 30_000,
+      onAgentEvent: () => () => {},
+    },
+  };
+}

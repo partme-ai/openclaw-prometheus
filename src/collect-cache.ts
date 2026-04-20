@@ -8,6 +8,7 @@ export type CollectBundle = {
   definitions: MetricDefinition[];
   samples: MetricSample[];
   diagnostics: CollectorDiagnostic[];
+  collectDurationSeconds?: number;
 };
 
 /**

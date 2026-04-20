@@ -3,11 +3,7 @@ import { rpcCall } from "../ws-bridge.js";
 
 const PREFIX = "openclaw_usage";
 
-/** 与 Gateway `sessions.usage` 请求对齐：分析最近若干天、最多条会话，用于聚合 byProvider */
-const SESSIONS_USAGE_PARAMS: Record<string, unknown> = {
-  days: 30,
-  limit: 500,
-};
+const DEFAULT_USAGE_WINDOW_DAYS = 30;
 
 type CostTotalsShape = {
   input?: number;
@@ -18,6 +14,22 @@ type CostTotalsShape = {
   totalCost?: number;
   count?: number;
   missingCostEntries?: number;
+};
+
+type UsageCostDailyEntry = {
+  date?: string;
+  input?: number;
+  output?: number;
+  cacheRead?: number;
+  cacheWrite?: number;
+  totalTokens?: number;
+  totalCost?: number;
+  missingCostEntries?: number;
+};
+
+type UsageCostResult = Record<string, unknown> & {
+  totals?: CostTotalsShape;
+  daily?: UsageCostDailyEntry[];
 };
 
 type SessionsUsageResult = {
@@ -136,13 +148,18 @@ export class UsageCollector implements MetricCollector {
   ];
 
   async collect(): Promise<MetricSample[]> {
+    const usageWindow = buildUsageWindowParams();
     const [costResult, sessionsUsageResult] = await Promise.all([
-      rpcCall<Record<string, unknown>>("usage.cost"),
-      rpcCall<SessionsUsageResult>("sessions.usage", SESSIONS_USAGE_PARAMS),
+      rpcCall<UsageCostResult>("usage.cost", usageWindow),
+      rpcCall<SessionsUsageResult>("sessions.usage", {
+        ...usageWindow,
+        limit: 1000,
+        includeContextWeight: true,
+      }),
     ]);
     const samples: MetricSample[] = [];
     const cost = costResult ?? {};
-    const totals = normalizeTotals((cost as { totals?: CostTotalsShape }).totals ?? sessionsUsageResult?.totals);
+    const totals = normalizeTotals(cost.totals ?? sessionsUsageResult?.totals);
 
     samples.push({ name: `${PREFIX}_requests_total`, value: extractNumber(cost, "requests", "totalRequests", "count") });
     samples.push({ name: `${PREFIX}_tokens_input_total`, value: totals.input });
@@ -160,7 +177,7 @@ export class UsageCollector implements MetricCollector {
     appendDimensionSamples(samples, `${PREFIX}_model`, ["provider", "model"], sessionsUsageResult?.aggregates?.byModel);
     appendAgentSamples(samples, sessionsUsageResult?.aggregates?.byAgent);
     appendChannelSamples(samples, sessionsUsageResult?.aggregates?.byChannel);
-    appendDailySamples(samples, sessionsUsageResult?.aggregates?.daily);
+    appendDailySamples(samples, cost.daily, sessionsUsageResult?.aggregates?.daily);
     appendDailyLatencySamples(samples, sessionsUsageResult?.aggregates?.dailyLatency);
     appendModelDailySamples(samples, sessionsUsageResult?.aggregates?.modelDaily);
     return samples;
@@ -343,7 +360,8 @@ function appendChannelSamples(
 
 function appendDailySamples(
   samples: MetricSample[],
-  rows:
+  costRows: UsageCostDailyEntry[] | undefined,
+  sessionRows:
     | Array<{
         date?: string;
         tokens?: number;
@@ -354,11 +372,50 @@ function appendDailySamples(
       }>
     | undefined,
 ): void {
-  if (!Array.isArray(rows)) {
+  const merged = new Map<string, {
+    tokens?: number;
+    cost?: number;
+    messages?: number;
+    toolCalls?: number;
+    errors?: number;
+  }>();
+
+  if (Array.isArray(costRows)) {
+    for (const row of costRows) {
+      const date = sanitizeLabel(row.date || "unknown");
+      const existing = merged.get(date) ?? {};
+      merged.set(date, {
+        ...existing,
+        tokens:
+          num(row.totalTokens) > 0
+            ? num(row.totalTokens)
+            : num(row.input) + num(row.output) + num(row.cacheRead) + num(row.cacheWrite),
+        cost: num(row.totalCost),
+      });
+    }
+  }
+
+  if (Array.isArray(sessionRows)) {
+    for (const row of sessionRows) {
+      const date = sanitizeLabel(row.date || "unknown");
+      const existing = merged.get(date) ?? {};
+      merged.set(date, {
+        ...existing,
+        tokens: existing.tokens ?? num(row.tokens),
+        cost: existing.cost ?? num(row.cost),
+        messages: num(row.messages),
+        toolCalls: num(row.toolCalls),
+        errors: num(row.errors),
+      });
+    }
+  }
+
+  if (merged.size === 0) {
     return;
   }
-  for (const row of rows) {
-    const labels = { date: sanitizeLabel(row.date || "unknown") };
+
+  for (const [date, row] of merged.entries()) {
+    const labels = { date };
     samples.push({ name: `${PREFIX}_daily_tokens_total`, labels, value: num(row.tokens) });
     samples.push({ name: `${PREFIX}_daily_cost_usd_total`, labels, value: num(row.cost) });
     samples.push({ name: `${PREFIX}_daily_messages_total`, labels, value: num(row.messages) });
@@ -419,4 +476,41 @@ function appendModelDailySamples(
     samples.push({ name: `${PREFIX}_model_daily_tokens_total`, labels, value: num(row.tokens) });
     samples.push({ name: `${PREFIX}_model_daily_cost_usd_total`, labels, value: num(row.cost) });
   }
+}
+
+function buildUsageWindowParams(now = new Date()): {
+  startDate: string;
+  endDate: string;
+  mode: "specific";
+  utcOffset: string;
+} {
+  const end = new Date(now);
+  const start = new Date(now);
+  start.setDate(start.getDate() - (DEFAULT_USAGE_WINDOW_DAYS - 1));
+
+  return {
+    startDate: formatLocalDate(start),
+    endDate: formatLocalDate(end),
+    mode: "specific",
+    utcOffset: formatUtcOffset(now),
+  };
+}
+
+function formatLocalDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatUtcOffset(date: Date): string {
+  const totalMinutes = -date.getTimezoneOffset();
+  const sign = totalMinutes >= 0 ? "+" : "-";
+  const absMinutes = Math.abs(totalMinutes);
+  const hours = Math.floor(absMinutes / 60);
+  const minutes = absMinutes % 60;
+  if (minutes === 0) {
+    return `UTC${sign}${hours}`;
+  }
+  return `UTC${sign}${hours}:${String(minutes).padStart(2, "0")}`;
 }

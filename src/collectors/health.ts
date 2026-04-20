@@ -17,6 +17,7 @@ import type { MetricCollector, MetricDefinition, MetricSample, HealthSnapshot } 
 import { rpcCall } from "../ws-bridge.js";
 
 const PREFIX = "openclaw";
+const GATEWAY_PREFIX = "openclaw_gateway";
 
 /**
  * Health 采集器
@@ -27,10 +28,10 @@ export class HealthCollector implements MetricCollector {
 
   definitions: MetricDefinition[] = [
     // Gateway 整体
-    { name: `${PREFIX}_up`, help: "Gateway health status (1=ok, 0=error)", type: "gauge" },
-    { name: `${PREFIX}_health_check_duration_ms`, help: "Health check probe duration (ms)", type: "gauge" },
-    { name: `${PREFIX}_uptime_seconds`, help: "Gateway uptime in seconds", type: "gauge" },
-    { name: `${PREFIX}_heartbeat_interval_seconds`, help: "Heartbeat interval (seconds)", type: "gauge" },
+    { name: `${GATEWAY_PREFIX}_up`, help: "Gateway health status (1=ok, 0=error)", type: "gauge" },
+    { name: `${GATEWAY_PREFIX}_health_check_duration_ms`, help: "Gateway health check probe duration (ms)", type: "gauge" },
+    { name: `${GATEWAY_PREFIX}_uptime_seconds`, help: "Gateway uptime in seconds", type: "gauge" },
+    { name: `${GATEWAY_PREFIX}_heartbeat_interval_seconds`, help: "Gateway heartbeat interval (seconds)", type: "gauge" },
 
     // Agent
     { name: `${PREFIX}_agents_configured_total`, help: "Number of configured agents", type: "gauge" },
@@ -39,7 +40,6 @@ export class HealthCollector implements MetricCollector {
     { name: `${PREFIX}_sessions_count`, help: "Total sessions in store", type: "gauge" },
 
     // Channel 链接状态
-    { name: `${PREFIX}_channel_linked`, help: "Channel link status (1=linked, 0=unlinked)", type: "gauge", labels: ["channel_id", "channel_label"] },
     { name: `${PREFIX}_channels_linked_total`, help: "Number of linked channels", type: "gauge" },
     { name: `${PREFIX}_channels_total`, help: "Total number of configured channels", type: "gauge" },
   ];
@@ -50,52 +50,56 @@ export class HealthCollector implements MetricCollector {
    */
   async collect(): Promise<MetricSample[]> {
     const samples: MetricSample[] = [];
+    const health = await rpcCall<HealthSnapshot>("health");
 
-    try {
-      const health = await rpcCall<HealthSnapshot>("health");
+    // Gateway 整体
+    samples.push({ name: `${GATEWAY_PREFIX}_up`, value: health.ok ? 1 : 0 });
+    samples.push({ name: `${GATEWAY_PREFIX}_health_check_duration_ms`, value: health.durationMs ?? 0 });
+    samples.push({ name: `${GATEWAY_PREFIX}_uptime_seconds`, value: health.uptimeSeconds ?? (process.uptime()) });
+    samples.push({ name: `${GATEWAY_PREFIX}_heartbeat_interval_seconds`, value: health.heartbeatSeconds ?? 0 });
 
-      // Gateway 整体
-      samples.push({ name: `${PREFIX}_up`, value: health.ok ? 1 : 0 });
-      samples.push({ name: `${PREFIX}_health_check_duration_ms`, value: health.durationMs ?? 0 });
-      samples.push({ name: `${PREFIX}_uptime_seconds`, value: health.uptimeSeconds ?? (process.uptime()) });
-      samples.push({ name: `${PREFIX}_heartbeat_interval_seconds`, value: health.heartbeatSeconds ?? 0 });
+    // Agent 数量
+    const agentCount = Array.isArray(health.agents) ? health.agents.length : 0;
+    samples.push({ name: `${PREFIX}_agents_configured_total`, value: agentCount });
 
-      // Agent 数量
-      const agentCount = Array.isArray(health.agents) ? health.agents.length : 0;
-      samples.push({ name: `${PREFIX}_agents_configured_total`, value: agentCount });
+    // Session 数量
+    const sessionsCount =
+      typeof health.sessions?.count === "number"
+        ? health.sessions.count
+        : sumAgentSessions(health.agents);
+    samples.push({ name: `${PREFIX}_sessions_count`, value: sessionsCount });
 
-      // Session 数量
-      samples.push({ name: `${PREFIX}_sessions_count`, value: health.sessions?.count ?? 0 });
+    // Channel 链接状态
+    const channels = health.channels ?? {};
+    let linkedCount = 0;
+    let totalCount = 0;
 
-      // Channel 链接状态
-      const channels = health.channels ?? {};
-      const channelLabels = health.channelLabels ?? {};
-      let linkedCount = 0;
-      let totalCount = 0;
-
-      for (const [channelId, chHealth] of Object.entries(channels)) {
-        totalCount++;
-        const linked = chHealth.linked ? 1 : 0;
-        if (linked) linkedCount++;
-
-        samples.push({
-          name: `${PREFIX}_channel_linked`,
-          labels: {
-            channel_id: channelId,
-            channel_label: channelLabels[channelId] ?? channelId,
-          },
-          value: linked,
-        });
-      }
-
-      samples.push({ name: `${PREFIX}_channels_linked_total`, value: linkedCount });
-      samples.push({ name: `${PREFIX}_channels_total`, value: totalCount });
-    } catch {
-      // health 调用失败 → Gateway 不可用
-      samples.push({ name: `${PREFIX}_up`, value: 0 });
-      samples.push({ name: `${PREFIX}_uptime_seconds`, value: process.uptime() });
+    for (const [channelId, chHealth] of Object.entries(channels)) {
+      totalCount++;
+      const linked = chHealth.linked ? 1 : 0;
+      if (linked) linkedCount++;
     }
+
+    samples.push({ name: `${PREFIX}_channels_linked_total`, value: linkedCount });
+    samples.push({ name: `${PREFIX}_channels_total`, value: totalCount });
 
     return samples;
   }
+}
+
+function sumAgentSessions(agents: HealthSnapshot["agents"]): number {
+  if (!Array.isArray(agents)) {
+    return 0;
+  }
+
+  return agents.reduce((sum, agent) => {
+    const sessionCount = (agent as Record<string, unknown>).sessions;
+    if (sessionCount && typeof sessionCount === "object") {
+      const count = (sessionCount as Record<string, unknown>).count;
+      if (typeof count === "number" && Number.isFinite(count)) {
+        return sum + count;
+      }
+    }
+    return sum;
+  }, 0);
 }

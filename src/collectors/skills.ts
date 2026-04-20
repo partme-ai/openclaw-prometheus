@@ -34,10 +34,7 @@ export class SkillCollector implements MetricCollector {
    * 采集 Skill 指标
    */
   async collect(): Promise<MetricSample[]> {
-    const [statusResult, binsResult] = await Promise.all([
-      rpcCall<unknown>("skills.status"),
-      rpcCall<unknown>("skills.bins"),
-    ]);
+    const statusResult = await rpcCall<unknown>("skills.status");
 
     const samples: MetricSample[] = [];
     const statusObj = statusResult && typeof statusResult === "object"
@@ -58,13 +55,18 @@ export class SkillCollector implements MetricCollector {
     samples.push({ name: `${PREFIX}_blocked_total`, value: blockedCount });
 
     let binCount = 0;
-    if (Array.isArray(binsResult)) {
-      binCount = binsResult.length;
-    } else if (binsResult && typeof binsResult === "object") {
-      const obj = binsResult as Record<string, unknown>;
-      if (Array.isArray(obj.bins)) {
-        binCount = obj.bins.length;
+    try {
+      const binsResult = await rpcCall<unknown>("skills.bins");
+      if (Array.isArray(binsResult)) {
+        binCount = binsResult.length;
+      } else if (binsResult && typeof binsResult === "object") {
+        const obj = binsResult as Record<string, unknown>;
+        if (Array.isArray(obj.bins)) {
+          binCount = obj.bins.length;
+        }
       }
+    } catch {
+      // 某些角色无权访问 skills.bins；保留 skills.status 主体指标，bins_total 回退为 0。
     }
     samples.push({ name: `${PREFIX}_bins_total`, value: binCount });
 

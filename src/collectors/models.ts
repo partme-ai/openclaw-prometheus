@@ -31,35 +31,30 @@ export class ModelCollector implements MetricCollector {
    */
   async collect(): Promise<MetricSample[]> {
     const samples: MetricSample[] = [];
+    const result = await rpcCall<unknown>("models.list");
 
-    try {
-      const result = await rpcCall<unknown>("models.list");
+    // models.list 可能返回数组或 { models: [...] }
+    let models: Array<Record<string, unknown>> = [];
+    if (Array.isArray(result)) {
+      models = result;
+    } else if (result && typeof result === "object") {
+      const obj = result as Record<string, unknown>;
+      if (Array.isArray(obj.models)) models = obj.models;
+    }
 
-      // models.list 可能返回数组或 { models: [...] }
-      let models: Array<Record<string, unknown>> = [];
-      if (Array.isArray(result)) {
-        models = result;
-      } else if (result && typeof result === "object") {
-        const obj = result as Record<string, unknown>;
-        if (Array.isArray(obj.models)) models = obj.models;
-      }
+    samples.push({ name: `${PREFIX}_total`, value: models.length });
 
-      samples.push({ name: `${PREFIX}_total`, value: models.length });
+    // 按 provider 分组
+    const byProvider: Record<string, number> = {};
+    for (const m of models) {
+      // 模型 ID 格式通常为 "provider/model-name"
+      const id = (m.id as string) ?? (m.name as string) ?? "";
+      const provider = (m.provider as string) ?? id.split("/")[0] ?? "unknown";
+      byProvider[provider] = (byProvider[provider] ?? 0) + 1;
+    }
 
-      // 按 provider 分组
-      const byProvider: Record<string, number> = {};
-      for (const m of models) {
-        // 模型 ID 格式通常为 "provider/model-name"
-        const id = (m.id as string) ?? (m.name as string) ?? "";
-        const provider = (m.provider as string) ?? id.split("/")[0] ?? "unknown";
-        byProvider[provider] = (byProvider[provider] ?? 0) + 1;
-      }
-
-      for (const [provider, count] of Object.entries(byProvider)) {
-        samples.push({ name: `${PREFIX}_by_provider`, labels: { provider }, value: count });
-      }
-    } catch {
-      samples.push({ name: `${PREFIX}_total`, value: 0 });
+    for (const [provider, count] of Object.entries(byProvider)) {
+      samples.push({ name: `${PREFIX}_by_provider`, labels: { provider }, value: count });
     }
 
     return samples;

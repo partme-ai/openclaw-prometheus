@@ -48,6 +48,11 @@
         },
         "default": []
       },
+      "instance": {
+        "type": "string",
+        "default": "",
+        "description": "Instance label for multi-deployment (e.g., pod name, hostname)"
+      },
       "scrapeAuth": {
         "type": "object",
         "description": "Optional Bearer token check on /metrics routes (token via openclaw-prometheus_BEARER_TOKEN recommended)",

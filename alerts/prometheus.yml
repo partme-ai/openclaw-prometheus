@@ -1,0 +1,120 @@
+groups:
+  - name: openclaw.rules
+    interval: 15s
+    rules:
+      # ─────────── 可用性告警 ───────────
+      - alert: OpenClawDown
+        expr: openclaw_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "OpenClaw Prometheus plugin is down"
+          description: "Plugin {{ $labels.instance }} has been down for more than 1 minute"
+
+      - alert: OpenClawNotReady
+        expr: openclaw_ready == 0
+        for: 2m
+        labels:
+          severity: warning
+          category: availability
+        annotations:
+          summary: "OpenClaw Prometheus plugin not ready"
+          description: "Plugin {{ $labels.instance }} has not been ready for more than 2 minutes"
+
+      # ─────────── 采集健康告警 ───────────
+      - alert: OpenClawCollectorFailure
+        expr: openclaw_metrics_collector_success == 0
+        for: 2m
+        labels:
+          severity: warning
+          category: collector
+        annotations:
+          summary: "Collector {{ $labels.collector }} failed"
+          description: "Collector {{ $labels.collector }} has failed for more than 2 minutes"
+
+      - alert: OpenClawScrapeSlow
+        expr: openclaw_metrics_last_scrape_duration_seconds > 5
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "Metrics scrape is slow"
+          description: "Scrape duration > 5s for more than 5 minutes"
+
+      # ─────────── 基数告警 ───────────
+      - alert: OpenClawHighCardinality
+        expr: openclaw_metrics_series_total > 100000
+        for: 5m
+        labels:
+          severity: warning
+          category: cardinality
+        annotations:
+          summary: "High metric cardinality detected"
+          description: "Series count > 100K, consider dropping high-cardinality labels"
+
+      # ─────────── Agent 性能告警 ───────────
+      - alert: OpenClawAgentP95Slow
+        expr: histogram_quantile(0.95, rate(openclaw_agent_run_duration_seconds_bucket[5m])) > 300
+        for: 10m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "Agent run P95 latency > 5m"
+          description: "Agent run P95 duration > 5 minutes for more than 10 minutes"
+
+      - alert: OpenClawAgentP99Slow
+        expr: histogram_quantile(0.99, rate(openclaw_agent_run_duration_seconds_bucket[5m])) > 600
+        for: 5m
+        labels:
+          severity: critical
+          category: performance
+        annotations:
+          summary: "Agent run P99 latency > 10m"
+          description: "Agent run P99 duration > 10 minutes for more than 5 minutes"
+
+      # ─────────── 渠道健康告警 ───────────
+      - alert: OpenClawChannelUnhealthy
+        expr: openclaw_sli_channel_health_ratio < 0.95
+        for: 5m
+        labels:
+          severity: warning
+          category: channel
+        annotations:
+          summary: "Channel health < 95%"
+          description: "Channel health ratio < 0.95 for more than 5 minutes"
+
+      # ─────────── 工具错误率告警 ───────────
+      - alert: OpenClawToolErrorHigh
+        expr: openclaw_sli_tool_error_ratio > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          category: tool
+        annotations:
+          summary: "Tool error rate > 10%"
+          description: "Tool error ratio > 0.1 for more than 5 minutes"
+
+      # ─────────── HTTP 延迟告警 ───────────
+      - alert: OpenClawHttpP95Slow
+        expr: openclaw_sli_http_request_p95_seconds > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          category: http
+        annotations:
+          summary: "HTTP request P95 latency > 500ms"
+          description: "HTTP request P95 duration > 500ms for more than 5 minutes"
+
+      - alert: OpenClawHttpP99Slow
+        expr: openclaw_sli_http_request_p99_seconds > 1
+        for: 5m
+        labels:
+          severity: critical
+          category: http
+        annotations:
+          summary: "HTTP request P99 latency > 1s"
+          description: "HTTP request P99 duration > 1s for more than 5 minutes"

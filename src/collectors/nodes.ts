@@ -33,34 +33,29 @@ export class NodeCollector implements MetricCollector {
    */
   async collect(): Promise<MetricSample[]> {
     const samples: MetricSample[] = [];
+    const result = await rpcCall<unknown>("node.list");
 
-    try {
-      const result = await rpcCall<unknown>("node.list");
+    let nodes: Array<Record<string, unknown>> = [];
+    if (Array.isArray(result)) {
+      nodes = result;
+    } else if (result && typeof result === "object") {
+      const obj = result as Record<string, unknown>;
+      if (Array.isArray(obj.nodes)) nodes = obj.nodes;
+    }
 
-      let nodes: Array<Record<string, unknown>> = [];
-      if (Array.isArray(result)) {
-        nodes = result;
-      } else if (result && typeof result === "object") {
-        const obj = result as Record<string, unknown>;
-        if (Array.isArray(obj.nodes)) nodes = obj.nodes;
-      }
+    const connectedCount = nodes.filter((n) => n.connected).length;
 
-      const connectedCount = nodes.filter((n) => n.connected).length;
+    samples.push({ name: `${PREFIX}_total`, value: nodes.length });
+    samples.push({ name: `${PREFIX}_connected_total`, value: connectedCount });
 
-      samples.push({ name: `${PREFIX}_total`, value: nodes.length });
-      samples.push({ name: `${PREFIX}_connected_total`, value: connectedCount });
-
-      // 按平台
-      const byPlatform: Record<string, number> = {};
-      for (const n of nodes) {
-        const platform = (n.platform as string) ?? (n.deviceFamily as string) ?? "unknown";
-        byPlatform[platform] = (byPlatform[platform] ?? 0) + 1;
-      }
-      for (const [platform, count] of Object.entries(byPlatform)) {
-        samples.push({ name: `${PREFIX}_by_platform`, labels: { platform }, value: count });
-      }
-    } catch {
-      samples.push({ name: `${PREFIX}_total`, value: 0 });
+    // 按平台
+    const byPlatform: Record<string, number> = {};
+    for (const n of nodes) {
+      const platform = (n.platform as string) ?? (n.deviceFamily as string) ?? "unknown";
+      byPlatform[platform] = (byPlatform[platform] ?? 0) + 1;
+    }
+    for (const [platform, count] of Object.entries(byPlatform)) {
+      samples.push({ name: `${PREFIX}_by_platform`, labels: { platform }, value: count });
     }
 
     return samples;
