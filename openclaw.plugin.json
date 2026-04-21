@@ -1,7 +1,7 @@
 {
   "id": "openclaw-prometheus",
   "name": "openclaw-prometheus",
-  "version": "0.2.8",
+  "version": "0.3.0",
   "description": "Prometheus metrics exporter for OpenClaw Gateway - built on official plugin SDK runtime, hooks, events, and plugin-owned routes",
   "main": "dist/index.js",
   "channels": [],
