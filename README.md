@@ -18,10 +18,10 @@
 
 ## Core capabilities
 
-- **Multi-collector**: health, channels, sessions, usage, presence, cron, models, nodes, skills, and optional Node.js runtime (`openclaw_nodejs_*`).
-- **Endpoints**: Prometheus exposition on `{path}` (default `/metrics`), JSON on `{path}/per-object` and `{path}/detailed?family=`.
+- **Multi-collector**: health, status, last-heartbeat, channels, sessions, usage, presence, cron, models.authStatus, models, nodes, skills, and optional Node.js runtime (`openclaw_nodejs_*`).
+- **Endpoints**: Prometheus exposition on `{path}` (default `/metrics`), health JSON on `{path}/health`, JSON on `{path}/per-object` and `{path}/detailed?family=`.
 - **Collection cache**: `collectIntervalMs` reuses the last successful scrape bundle to reduce RPC load under frequent Prometheus scrapes (set `0` to disable).
-- **Meta metrics**: `openclaw_exporter_build_info`, `openclaw_metrics_last_scrape_duration_seconds`.
+- **Meta metrics**: `openclaw_exporter_build_info`, `openclaw_metrics_last_scrape_duration_seconds`, `openclaw_exporter_last_collect_timestamp_seconds`, `openclaw_gateway_rpc_*`.
 - **Optional scrape auth**: Bearer token via `openclaw-prometheus_BEARER_TOKEN` (recommended) or dev-only `scrapeAuth.bearerToken` in config.
 - **Enterprise-style operations** (aligned with common Prometheus exporter practice and ideas from [RabbitMQ’s Prometheus guide](https://www.rabbitmq.com/docs/prometheus)): stable metric names, separate “full text” vs JSON drill-down, TLS termination at the Gateway/reverse proxy, and cardinality-aware use of `/detailed?family=`.
 
@@ -36,6 +36,7 @@
 | Method & path | Format | Description |
 | --- | --- | --- |
 | `GET {path}` | Prometheus text | Scrape target (`Content-Type: text/plain; version=0.0.4`) |
+| `GET {path}/health` | JSON | Plugin/runtime/RPC health snapshot |
 | `GET {path}/per-object` | JSON | Grouped metrics for tooling |
 | `GET {path}/detailed?family=` | JSON | Filter by substring of metric name |
 
@@ -46,6 +47,7 @@ Default `{path}` is `/metrics`.
 | Prefix | Source |
 | --- | --- |
 | `openclaw_*` | `health` RPC (gateway uptime, channels, agents, sessions) |
+| `openclaw_gateway_*` | `status` / `last-heartbeat` + exporter RPC status |
 | `openclaw_channel_*` | `channels.status` |
 | `openclaw_session_*` | `sessions.list` |
 | `openclaw_usage_*` | `usage.cost` → `totals`（时间窗全局汇总，无 provider） |
@@ -68,6 +70,13 @@ Default `{path}` is `/metrics`.
 ### Install
 
 ```bash
+openclaw plugins install @partme.ai/openclaw-prometheus
+```
+
+If your default OpenClaw state dir is read-only (e.g. `EROFS` on `~/.openclaw/extensions`), set a writable state dir:
+
+```bash
+export OPENCLAW_STATE_DIR=/tmp/openclaw-state
 openclaw plugins install @partme.ai/openclaw-prometheus
 ```
 

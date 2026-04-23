@@ -12,6 +12,7 @@
 
 import type { MetricCollector, MetricDefinition, MetricSample, PresenceEntry } from "../types.js";
 import { rpcCall } from "../ws-bridge.js";
+import { CollectorError } from "../collector-error.js";
 
 const PREFIX = "openclaw_presence";
 
@@ -68,8 +69,8 @@ export class PresenceCollector implements MetricCollector {
       for (const [mode, count] of Object.entries(byMode)) {
         samples.push({ name: `${PREFIX}_by_mode`, labels: { mode }, value: count });
       }
-    } catch {
-      samples.push({ name: `${PREFIX}_connected_total`, value: 0 });
+    } catch (err) {
+      throw new CollectorError("system-presence rpc failed", [], err);
     }
 
     return samples;

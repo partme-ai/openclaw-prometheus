@@ -89,6 +89,13 @@ export interface MetricCollector {
   collect(): Promise<MetricSample[]>;
 }
 
+export interface CollectorDiagnostic {
+  collector: string;
+  ok: boolean;
+  durationMs: number;
+  error?: string;
+}
+
 // ─────────────────── Gateway RPC 响应类型（真实结构） ───────────────────
 
 /**
@@ -231,3 +238,62 @@ export interface PresenceEntry {
   connectedAt?: number;
   [key: string]: unknown;
 }
+
+export interface ModelAuthStatusProvider {
+  provider: string;
+  displayName?: string;
+  status: string;
+  expiry?: { at: number; remainingMs: number; label?: string };
+}
+
+export interface ModelAuthStatusResult {
+  ts: number;
+  providers: ModelAuthStatusProvider[];
+}
+
+export type HeartbeatIndicatorType = "ok" | "alert" | "error";
+
+export type HeartbeatEventPayload = {
+  ts: number;
+  status: "sent" | "ok-empty" | "ok-token" | "skipped" | "failed";
+  to?: string;
+  accountId?: string;
+  preview?: string;
+  durationMs?: number;
+  hasMedia?: boolean;
+  reason?: string;
+  channel?: string;
+  silent?: boolean;
+  indicatorType?: HeartbeatIndicatorType;
+};
+
+export type StatusSummary = {
+  runtimeVersion?: string | null;
+  linkChannel?: {
+    id: string;
+    label: string;
+    linked: boolean;
+    authAgeMs: number | null;
+  };
+  heartbeat: {
+    defaultAgentId: string;
+    agents: Array<{
+      agentId: string;
+      enabled: boolean;
+      every: string;
+      everyMs: number | null;
+    }>;
+  };
+  queuedSystemEvents: string[];
+  tasks: {
+    total: number;
+    active: number;
+    terminal: number;
+    failures: number;
+    byStatus: Record<string, number>;
+    byRuntime: Record<string, number>;
+  };
+  sessions: {
+    count: number;
+  };
+};

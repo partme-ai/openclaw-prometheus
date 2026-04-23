@@ -38,8 +38,9 @@ function formatSample(sample: MetricSample): string {
 /**
  * 转义 label 值中的特殊字符
  */
-function escapeLabel(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+function escapeLabel(value: unknown): string {
+  const s = value === undefined || value === null ? "unknown" : String(value);
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
 }
 
 /**
@@ -54,7 +55,16 @@ export function formatPrometheus(
   samples: MetricSample[]
 ): string {
   const lines: string[] = [];
-  const defMap = new Map(definitions.map((d) => [d.name, d]));
+  const uniqueDefs: MetricDefinition[] = [];
+  const seenDefs = new Set<string>();
+  for (const d of definitions) {
+    if (seenDefs.has(d.name)) {
+      continue;
+    }
+    seenDefs.add(d.name);
+    uniqueDefs.push(d);
+  }
+  const defMap = new Map(uniqueDefs.map((d) => [d.name, d]));
 
   // 按指标名分组样本
   const samplesByName = new Map<string, MetricSample[]>();
@@ -65,7 +75,7 @@ export function formatPrometheus(
   }
 
   // 按定义顺序输出
-  for (const def of definitions) {
+  for (const def of uniqueDefs) {
     lines.push(formatDefinition(def));
     const metricSamples = samplesByName.get(def.name) ?? [];
     for (const sample of metricSamples) {

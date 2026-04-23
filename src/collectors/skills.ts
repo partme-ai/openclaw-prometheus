@@ -11,6 +11,7 @@
 
 import type { MetricCollector, MetricDefinition, MetricSample } from "../types.js";
 import { rpcCall } from "../ws-bridge.js";
+import { CollectorError } from "../collector-error.js";
 
 const PREFIX = "openclaw_skill";
 
@@ -33,10 +34,13 @@ export class SkillCollector implements MetricCollector {
     const samples: MetricSample[] = [];
 
     try {
-      const [statusResult, binsResult] = await Promise.all([
-        rpcCall<unknown>("skills.status").catch(() => ({})),
-        rpcCall<unknown>("skills.bins").catch(() => []),
+      const [statusRes, binsRes] = await Promise.allSettled([
+        rpcCall<unknown>("skills.status"),
+        rpcCall<unknown>("skills.bins"),
       ]);
+
+      const statusResult = statusRes.status === "fulfilled" ? statusRes.value : null;
+      const binsResult = binsRes.status === "fulfilled" ? binsRes.value : null;
 
       // skills.status
       let skillCount = 0;
@@ -56,8 +60,23 @@ export class SkillCollector implements MetricCollector {
         if (Array.isArray(obj.bins)) binCount = obj.bins.length;
       }
       samples.push({ name: `${PREFIX}_bins_total`, value: binCount });
-    } catch {
-      samples.push({ name: `${PREFIX}_total`, value: 0 });
+      const errors: string[] = [];
+      if (statusRes.status === "rejected") errors.push(`skills.status: ${String(statusRes.reason)}`);
+      if (binsRes.status === "rejected") errors.push(`skills.bins: ${String(binsRes.reason)}`);
+      if (errors.length > 0) {
+        const cause =
+          statusRes.status === "rejected"
+            ? statusRes.reason
+            : binsRes.status === "rejected"
+              ? binsRes.reason
+              : undefined;
+        throw new CollectorError(errors.join("; "), samples, cause);
+      }
+    } catch (err) {
+      if (err instanceof CollectorError) {
+        throw err;
+      }
+      throw new CollectorError("skills rpc failed", [], err);
     }
 
     return samples;

@@ -1,8 +1,8 @@
 {
   "id": "openclaw-prometheus",
   "name": "openclaw-prometheus",
-  "version": "0.2.8",
-  "description": "Prometheus metrics exporter for OpenClaw Gateway - based on real Gateway RPC methods (health, sessions.list, channels.status, usage, presence, cron, models, nodes, skills)",
+  "version": "0.3.0",
+  "description": "Prometheus metrics exporter for OpenClaw Gateway - based on real Gateway RPC methods (health, status, last-heartbeat, sessions.list, channels.status, usage, presence, cron, models.authStatus, models, nodes, skills)",
   "main": "dist/index.js",
   "channels": [],
   "commands": [],

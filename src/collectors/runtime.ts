@@ -7,6 +7,28 @@ import type { MetricCollector, MetricDefinition, MetricSample } from "../types.j
 
 const PREFIX = "openclaw_nodejs";
 
+let eventLoopLag = 0;
+let lastCheck = Date.now();
+let eventLoopMeasureStarted = false;
+
+function ensureEventLoopMeasure(): void {
+  if (eventLoopMeasureStarted) {
+    return;
+  }
+  eventLoopMeasureStarted = true;
+  const expected = 100;
+  const measure = () => {
+    const now = Date.now();
+    const actual = now - lastCheck;
+    eventLoopLag = Math.max(0, actual - expected);
+    lastCheck = now;
+    const t = setTimeout(measure, expected);
+    t.unref?.();
+  };
+  const t0 = setTimeout(measure, expected);
+  t0.unref?.();
+}
+
 /**
  * 运行时采集器
  * 采集 Node.js 进程级别的资源使用指标
@@ -23,31 +45,8 @@ export class RuntimeCollector implements MetricCollector {
     { name: `${PREFIX}_uptime_seconds`, help: "Node.js process uptime", type: "gauge" },
   ];
 
-  /** 事件循环延迟测量值 */
-  private eventLoopLag = 0;
-  /** 上次事件循环检测时间 */
-  private lastCheck = Date.now();
-  /** 定时器引用 */
-  private timer: ReturnType<typeof setTimeout> | null = null;
-
   constructor() {
-    this.startEventLoopMeasure();
-  }
-
-  /**
-   * 启动事件循环延迟测量
-   * 每 100ms 检查一次实际经过时间与预期的差值
-   */
-  private startEventLoopMeasure(): void {
-    const measure = () => {
-      const now = Date.now();
-      const expected = 100;
-      const actual = now - this.lastCheck;
-      this.eventLoopLag = Math.max(0, actual - expected);
-      this.lastCheck = now;
-      this.timer = setTimeout(measure, expected);
-    };
-    this.timer = setTimeout(measure, 100);
+    ensureEventLoopMeasure();
   }
 
   /**
@@ -61,7 +60,7 @@ export class RuntimeCollector implements MetricCollector {
       { name: `${PREFIX}_heap_total_bytes`, value: mem.heapTotal },
       { name: `${PREFIX}_external_bytes`, value: mem.external },
       { name: `${PREFIX}_rss_bytes`, value: mem.rss },
-      { name: `${PREFIX}_event_loop_lag_ms`, value: this.eventLoopLag },
+      { name: `${PREFIX}_event_loop_lag_ms`, value: eventLoopLag },
       { name: `${PREFIX}_uptime_seconds`, value: process.uptime() },
     ];
   }

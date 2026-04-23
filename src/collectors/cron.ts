@@ -14,6 +14,7 @@
 
 import type { MetricCollector, MetricDefinition, MetricSample, CronStatus, CronJob } from "../types.js";
 import { rpcCall } from "../ws-bridge.js";
+import { CollectorError } from "../collector-error.js";
 
 const PREFIX = "openclaw_cron";
 
@@ -40,10 +41,20 @@ export class CronCollector implements MetricCollector {
     const samples: MetricSample[] = [];
 
     try {
-      const [status, listResult] = await Promise.all([
-        rpcCall<CronStatus>("cron.status").catch(() => ({} as CronStatus)),
-        rpcCall<unknown>("cron.list").catch(() => []),
+      const [statusRes, listRes] = await Promise.allSettled([
+        rpcCall<CronStatus>("cron.status"),
+        rpcCall<unknown>("cron.list", {
+          includeDisabled: true,
+          limit: 50,
+          offset: 0,
+          enabled: "all",
+          sortBy: "nextRunAtMs",
+          sortDir: "asc",
+        }),
       ]);
+
+      const status = statusRes.status === "fulfilled" ? statusRes.value : ({} as CronStatus);
+      const listResult = listRes.status === "fulfilled" ? listRes.value : ([] as unknown[]);
 
       // 调度器状态
       samples.push({
@@ -72,8 +83,20 @@ export class CronCollector implements MetricCollector {
         const secondsUntil = Math.max(0, Math.round((status.nextWakeTime - Date.now()) / 1000));
         samples.push({ name: `${PREFIX}_next_wake_in_seconds`, value: secondsUntil });
       }
-    } catch {
-      samples.push({ name: `${PREFIX}_jobs_total`, value: 0 });
+      const errors: string[] = [];
+      if (statusRes.status === "rejected") errors.push(`cron.status: ${String(statusRes.reason)}`);
+      if (listRes.status === "rejected") errors.push(`cron.list: ${String(listRes.reason)}`);
+      if (errors.length > 0) {
+        const cause =
+          statusRes.status === "rejected"
+            ? statusRes.reason
+            : listRes.status === "rejected"
+              ? listRes.reason
+              : undefined;
+        throw new CollectorError(errors.join("; "), samples, cause);
+      }
+    } catch (err) {
+      throw new CollectorError("cron rpc failed", [], err);
     }
 
     return samples;

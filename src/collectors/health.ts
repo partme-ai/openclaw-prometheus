@@ -15,8 +15,10 @@
 
 import type { MetricCollector, MetricDefinition, MetricSample, HealthSnapshot } from "../types.js";
 import { rpcCall } from "../ws-bridge.js";
+import { CollectorError } from "../collector-error.js";
 
 const PREFIX = "openclaw";
+const GATEWAY_PREFIX = "openclaw_gateway";
 
 /**
  * Health 采集器
@@ -39,9 +41,9 @@ export class HealthCollector implements MetricCollector {
     { name: `${PREFIX}_sessions_count`, help: "Total sessions in store", type: "gauge" },
 
     // Channel 链接状态
-    { name: `${PREFIX}_channel_linked`, help: "Channel link status (1=linked, 0=unlinked)", type: "gauge", labels: ["channel_id", "channel_label"] },
-    { name: `${PREFIX}_channels_linked_total`, help: "Number of linked channels", type: "gauge" },
-    { name: `${PREFIX}_channels_total`, help: "Total number of configured channels", type: "gauge" },
+    { name: `${GATEWAY_PREFIX}_channel_linked`, help: "Channel link status from gateway health (1=linked, 0=unlinked)", type: "gauge", labels: ["channel_id", "channel_label"] },
+    { name: `${GATEWAY_PREFIX}_channels_linked_total`, help: "Number of linked channels from gateway health", type: "gauge" },
+    { name: `${GATEWAY_PREFIX}_channels_total`, help: "Total number of configured channels from gateway health", type: "gauge" },
   ];
 
   /**
@@ -79,7 +81,7 @@ export class HealthCollector implements MetricCollector {
         if (linked) linkedCount++;
 
         samples.push({
-          name: `${PREFIX}_channel_linked`,
+          name: `${GATEWAY_PREFIX}_channel_linked`,
           labels: {
             channel_id: channelId,
             channel_label: channelLabels[channelId] ?? channelId,
@@ -88,12 +90,12 @@ export class HealthCollector implements MetricCollector {
         });
       }
 
-      samples.push({ name: `${PREFIX}_channels_linked_total`, value: linkedCount });
-      samples.push({ name: `${PREFIX}_channels_total`, value: totalCount });
-    } catch {
-      // health 调用失败 → Gateway 不可用
+      samples.push({ name: `${GATEWAY_PREFIX}_channels_linked_total`, value: linkedCount });
+      samples.push({ name: `${GATEWAY_PREFIX}_channels_total`, value: totalCount });
+    } catch (err) {
       samples.push({ name: `${PREFIX}_up`, value: 0 });
       samples.push({ name: `${PREFIX}_uptime_seconds`, value: process.uptime() });
+      throw new CollectorError("health rpc failed", samples, err);
     }
 
     return samples;

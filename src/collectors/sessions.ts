@@ -16,6 +16,7 @@
 
 import type { MetricCollector, MetricDefinition, MetricSample, SessionEntry } from "../types.js";
 import { rpcCall } from "../ws-bridge.js";
+import { CollectorError } from "../collector-error.js";
 
 const PREFIX = "openclaw_session";
 
@@ -51,7 +52,11 @@ export class SessionCollector implements MetricCollector {
     const samples: MetricSample[] = [];
 
     try {
-      const result = await rpcCall<unknown>("sessions.list");
+      const result = await rpcCall<unknown>("sessions.list", {
+        includeGlobal: true,
+        includeUnknown: false,
+        limit: 120,
+      });
 
       // sessions.list 可能返回数组或 { sessions: [...] } 或 { entries: [...] }
       let sessions: SessionEntry[] = [];
@@ -114,8 +119,8 @@ export class SessionCollector implements MetricCollector {
       const avg = sessions.length > 0 ? Math.round(totalTokens / sessions.length) : 0;
       samples.push({ name: `${PREFIX}_tokens_avg_per_session`, value: avg });
       samples.push({ name: `${PREFIX}_tokens_max_per_session`, value: maxTokens });
-    } catch {
-      samples.push({ name: `${PREFIX}_total`, value: 0 });
+    } catch (err) {
+      throw new CollectorError("sessions.list rpc failed", [], err);
     }
 
     return samples;

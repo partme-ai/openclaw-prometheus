@@ -11,6 +11,7 @@
 
 import type { MetricCollector, MetricDefinition, MetricSample } from "../types.js";
 import { rpcCall } from "../ws-bridge.js";
+import { CollectorError } from "../collector-error.js";
 
 const PREFIX = "openclaw_model";
 
@@ -58,8 +59,8 @@ export class ModelCollector implements MetricCollector {
       for (const [provider, count] of Object.entries(byProvider)) {
         samples.push({ name: `${PREFIX}_by_provider`, labels: { provider }, value: count });
       }
-    } catch {
-      samples.push({ name: `${PREFIX}_total`, value: 0 });
+    } catch (err) {
+      throw new CollectorError("models.list rpc failed", [], err);
     }
 
     return samples;

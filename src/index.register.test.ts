@@ -21,7 +21,7 @@ function mockGatewayCall(method: string): Promise<unknown> {
 }
 
 describe("prometheusPlugin register", () => {
-  it("registers three HTTP routes and /metrics returns prometheus text", async () => {
+  it("registers HTTP routes and /metrics returns prometheus text", async () => {
     const routes: Array<{ path: string; handler: (a: IncomingMessage, b: ServerResponse) => Promise<void> }> = [];
 
     const api = {
@@ -41,7 +41,12 @@ describe("prometheusPlugin register", () => {
 
     prometheusPlugin.register(api as never);
 
-    expect(routes.map((r) => r.path)).toEqual(["/metrics", "/metrics/per-object", "/metrics/detailed"]);
+    expect(routes.map((r) => r.path)).toEqual([
+      "/metrics",
+      "/metrics/health",
+      "/metrics/per-object",
+      "/metrics/detailed",
+    ]);
 
     const metricsRoute = routes.find((r) => r.path === "/metrics")!;
     const chunks: string[] = [];

@@ -15,6 +15,7 @@ import type {
   ChannelsStatusSnapshot,
 } from "../types.js";
 import { rpcCall } from "../ws-bridge.js";
+import { CollectorError } from "../collector-error.js";
 
 const PREFIX = "openclaw_channel";
 
@@ -43,7 +44,10 @@ export class ChannelCollector implements MetricCollector {
     const samples: MetricSample[] = [];
 
     try {
-      const snapshot = await rpcCall<ChannelsStatusSnapshot>("channels.status");
+      const snapshot = await rpcCall<ChannelsStatusSnapshot>("channels.status", {
+        probe: false,
+        timeoutMs: 8000,
+      });
 
       const channels = snapshot.channels ?? {};
       const labels = snapshot.channelLabels ?? {};
@@ -80,8 +84,8 @@ export class ChannelCollector implements MetricCollector {
 
       samples.push({ name: `${PREFIX}_linked_total`, value: linkedCount });
       samples.push({ name: `${PREFIX}_unlinked_total`, value: channelIds.length - linkedCount });
-    } catch {
-      samples.push({ name: `${PREFIX}_total`, value: 0 });
+    } catch (err) {
+      throw new CollectorError("channels.status rpc failed", [], err);
     }
 
     return samples;

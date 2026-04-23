@@ -75,3 +75,4 @@ pom.xml.versionsBackup
 qodana.yaml
 /.vscode/
 /.aliyun/
+/.omx/

@@ -12,6 +12,7 @@
 
 import type { MetricCollector, MetricDefinition, MetricSample } from "../types.js";
 import { rpcCall } from "../ws-bridge.js";
+import { CollectorError } from "../collector-error.js";
 
 const PREFIX = "openclaw_node";
 
@@ -59,8 +60,8 @@ export class NodeCollector implements MetricCollector {
       for (const [platform, count] of Object.entries(byPlatform)) {
         samples.push({ name: `${PREFIX}_by_platform`, labels: { platform }, value: count });
       }
-    } catch {
-      samples.push({ name: `${PREFIX}_total`, value: 0 });
+    } catch (err) {
+      throw new CollectorError("node.list rpc failed", [], err);
     }
 
     return samples;

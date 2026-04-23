@@ -20,6 +20,10 @@ import type { GatewayRuntime } from "./types.js";
 
 /** 缓存的 Gateway Runtime 引用 */
 let _runtime: GatewayRuntime | null = null;
+let _rpcClientInitialized = false;
+let _lastRpcSuccessAt: number | null = null;
+let _lastRpcMethod: string | null = null;
+let _lastRpcError: string | null = null;
 
 /**
  * 设置 Gateway Runtime 引用
@@ -29,6 +33,7 @@ let _runtime: GatewayRuntime | null = null;
  */
 export function setRuntime(runtime: GatewayRuntime): void {
   _runtime = runtime;
+  _rpcClientInitialized = true;
 }
 
 /**
@@ -68,18 +73,38 @@ export async function rpcCall<T = unknown>(
 
   // 策略 1: gatewayCall（首选）
   if (typeof runtimeAny.gatewayCall === "function") {
-    return (runtimeAny.gatewayCall as (m: string, p?: Record<string, unknown>) => Promise<T>)(
-      method,
-      params
-    );
+    try {
+      const payload = await (runtimeAny.gatewayCall as (
+        m: string,
+        p?: Record<string, unknown>
+      ) => Promise<T>)(method, params);
+      _lastRpcSuccessAt = Date.now();
+      _lastRpcMethod = method;
+      _lastRpcError = null;
+      return payload;
+    } catch (err) {
+      _lastRpcMethod = method;
+      _lastRpcError = err instanceof Error ? err.message : String(err);
+      throw err;
+    }
   }
 
   // 策略 2: invoke（通用接口）
   if (typeof runtimeAny.invoke === "function") {
-    return (runtimeAny.invoke as (m: string, p?: Record<string, unknown>) => Promise<T>)(
-      method,
-      params
-    );
+    try {
+      const payload = await (runtimeAny.invoke as (
+        m: string,
+        p?: Record<string, unknown>
+      ) => Promise<T>)(method, params);
+      _lastRpcSuccessAt = Date.now();
+      _lastRpcMethod = method;
+      _lastRpcError = null;
+      return payload;
+    } catch (err) {
+      _lastRpcMethod = method;
+      _lastRpcError = err instanceof Error ? err.message : String(err);
+      throw err;
+    }
   }
 
   // 策略 3: 属性遍历（"agents.list" → runtime.agents.list()）
@@ -91,11 +116,24 @@ export async function rpcCall<T = unknown>(
   }
   const funcName = parts[parts.length - 1];
   if (target && typeof (target as Record<string, unknown>)[funcName] === "function") {
-    return (target as Record<string, (...args: unknown[]) => Promise<T>>)[funcName](params);
+    try {
+      const payload = await (target as Record<string, (...args: unknown[]) => Promise<T>>)[
+        funcName
+      ](params);
+      _lastRpcSuccessAt = Date.now();
+      _lastRpcMethod = method;
+      _lastRpcError = null;
+      return payload;
+    } catch (err) {
+      _lastRpcMethod = method;
+      _lastRpcError = err instanceof Error ? err.message : String(err);
+      throw err;
+    }
   }
 
-  // 降级：返回空结果
-  return {} as T;
+  _lastRpcMethod = method;
+  _lastRpcError = "no runtime call strategy available";
+  throw new Error(`[openclaw-prometheus] rpcCall("${method}") unavailable: no runtime call strategy`);
 }
 
 /**
@@ -126,4 +164,18 @@ export function getConfig(): Record<string, unknown> {
  */
 export function isReady(): boolean {
   return _runtime !== null;
+}
+
+export function getRpcStatus(): {
+  initialized: boolean;
+  lastSuccessAt: number | null;
+  lastMethod: string | null;
+  lastError: string | null;
+} {
+  return {
+    initialized: _rpcClientInitialized,
+    lastSuccessAt: _lastRpcSuccessAt,
+    lastMethod: _lastRpcMethod,
+    lastError: _lastRpcError,
+  };
 }

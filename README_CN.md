@@ -19,10 +19,10 @@
 
 ## 核心能力
 
-- **多采集器**：健康、渠道、会话、用量、在线、cron、模型、节点、skills，以及可选的 Node 运行时指标（`openclaw_nodejs_*`）。
-- **端点**：`{path}`（默认 `/metrics`）暴露 Prometheus；`{path}/per-object`、`{path}/detailed?family=` 提供 JSON。
+- **多采集器**：健康、status、last-heartbeat、渠道、会话、用量、在线、cron、models.authStatus、模型、节点、skills，以及可选的 Node 运行时指标（`openclaw_nodejs_*`）。
+- **端点**：`{path}`（默认 `/metrics`）暴露 Prometheus；`{path}/health` 输出插件健康快照；`{path}/per-object`、`{path}/detailed?family=` 提供 JSON。
 - **采集缓存**：`collectIntervalMs` 在多次抓取间复用上一次成功结果，减轻 RPC 压力；设为 `0` 则每次抓取全量采集。
-- **元指标**：`openclaw_exporter_build_info`、`openclaw_metrics_last_scrape_duration_seconds`。
+- **元指标**：`openclaw_exporter_build_info`、`openclaw_metrics_last_scrape_duration_seconds`、`openclaw_exporter_last_collect_timestamp_seconds`、`openclaw_gateway_rpc_*`。
 - **可选抓取鉴权**：推荐使用环境变量 `openclaw-prometheus_BEARER_TOKEN`；仅本地调试可在配置中写 `scrapeAuth.bearerToken`。
 - **企业级运维取向**（命名与分层方式参考 [RabbitMQ Prometheus 文档](https://www.rabbitmq.com/docs/prometheus) 中的实践：专用路径、聚合与按实体 JSON、TLS 由 Gateway/反向代理终止、控制高基数标签使用等）。
 
@@ -37,6 +37,7 @@
 | 路径 | 格式 | 说明 |
 | --- | --- | --- |
 | `GET {path}` | Prometheus text | 标准抓取 |
+| `GET {path}/health` | JSON | 插件/RPC/采集健康快照 |
 | `GET {path}/per-object` | JSON | 按对象分组 |
 | `GET {path}/detailed?family=` | JSON | 按名称子串过滤 |
 
@@ -47,6 +48,7 @@
 | 前缀 | 数据来源 |
 | --- | --- |
 | `openclaw_*` | `health` |
+| `openclaw_gateway_*` | `status` / `last-heartbeat` + exporter RPC 状态 |
 | `openclaw_channel_*` | `channels.status` |
 | `openclaw_session_*` | `sessions.list` |
 | `openclaw_usage_*` | `usage.cost` → `totals`（时间窗全局汇总） |
@@ -69,6 +71,13 @@
 ### 安装
 
 ```bash
+openclaw plugins install @partme.ai/openclaw-prometheus
+```
+
+如果默认 OpenClaw 状态目录不可写（例如 `~/.openclaw/extensions` 报 `EROFS`），可先设置到可写目录：
+
+```bash
+export OPENCLAW_STATE_DIR=/tmp/openclaw-state
 openclaw plugins install @partme.ai/openclaw-prometheus
 ```
 
