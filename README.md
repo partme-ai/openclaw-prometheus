@@ -2,7 +2,7 @@
 
 # OpenClaw Prometheus
 
-**OpenClaw plugin — Gateway RPC–backed Prometheus metrics and JSON inspection endpoints**
+**OpenClaw plugin — Prometheus metrics and JSON diagnostics built on the official plugin SDK**
 
 ![npm](https://img.shields.io/badge/npm-@partme.ai%2Fopenclaw__prometheus-blue)
 ![Node](https://img.shields.io/badge/Node.js-20+-green)
@@ -14,21 +14,30 @@
 
 ## Introduction
 
-`@partme.ai/openclaw-prometheus` is a **non-channel** plugin for [OpenClaw](https://github.com/openclaw/openclaw). It uses [`definePluginEntry`](https://docs.openclaw.ai/plugins/sdk-entrypoints#definepluginentry) (see [Building plugins](https://docs.openclaw.ai/plugins/building-plugins)) to register HTTP routes on the Gateway. Collectors call documented Gateway RPC methods (`health`, `channels.status`, `sessions.list`, `usage.*`, `system-presence`, `cron.*`, `models.list`, `node.list`, `skills.*`) and expose the result as Prometheus text or JSON.
+`@partme.ai/openclaw-prometheus` is a **non-channel** plugin for [OpenClaw](https://github.com/openclaw/openclaw). It follows the official plugin model: manifest-driven discovery plus [`definePluginEntry`](https://docs.openclaw.ai/plugins/sdk-entrypoints#definepluginentry), documented `api.runtime.*` helpers, plugin hooks, runtime event listeners, and plugin-owned HTTP routes.
+
+This version intentionally avoids host-private imports and undocumented Gateway internals. Metrics are built from facts the plugin can legally observe:
+
+- `api.runtime.modelAuth`, `api.runtime.channel`, `api.runtime.state`
+- plugin hooks such as `message_received`, `message_sent`, `before_tool_call`, `after_tool_call`, `llm_output`, `agent_end`
+- `api.runtime.events.onAgentEvent(...)` and `onSessionTranscriptUpdate(...)`
+- exporter self metrics for scrape quality, route health, and snapshot freshness
 
 ## Core capabilities
 
-- **Multi-collector**: health, channels, sessions, usage, presence, cron, models, nodes, skills, and optional Node.js runtime (`openclaw_nodejs_*`).
-- **Endpoints**: Prometheus exposition on `{path}` (default `/metrics`), JSON on `{path}/per-object` and `{path}/detailed?family=`.
-- **Collection cache**: `collectIntervalMs` reuses the last successful scrape bundle to reduce RPC load under frequent Prometheus scrapes (set `0` to disable).
+- **Pure plugin architecture**: uses only documented SDK surfaces, no host source patching.
+- **Metrics layers**: exporter self metrics, runtime snapshot metrics, and hook/event-derived workload metrics.
+- **Endpoints**: Prometheus exposition on `{path}` (default `/metrics`), JSON on `{path}/per-object`, `{path}/detailed?family=`, and `{path}/health`.
+- **Snapshot refresh**: `snapshotIntervalMs` controls model-auth and channel-activity probe refresh.
+- **Collection cache**: `collectIntervalMs` reuses the last successful scrape bundle to reduce cost under frequent Prometheus scrapes (set `0` to disable).
 - **Meta metrics**: `openclaw_exporter_build_info`, `openclaw_metrics_last_scrape_duration_seconds`.
 - **Optional scrape auth**: Bearer token via `openclaw-prometheus_BEARER_TOKEN` (recommended) or dev-only `scrapeAuth.bearerToken` in config.
 - **Enterprise-style operations** (aligned with common Prometheus exporter practice and ideas from [RabbitMQ’s Prometheus guide](https://www.rabbitmq.com/docs/prometheus)): stable metric names, separate “full text” vs JSON drill-down, TLS termination at the Gateway/reverse proxy, and cardinality-aware use of `/detailed?family=`.
 
 ### Plugin lifecycle
 
-- Loaded like any OpenClaw extension (`package.json` → `openclaw.extensions`).
-- `register()` wires `api.runtime` (for `gatewayCall` / `invoke` RPC) and `api.config`, then registers routes with `api.registerHttpRoute`.
+- Loaded through `package.json` / `openclaw.plugin.json` discovery like any other OpenClaw plugin.
+- `register()` wires `api.runtime`, installs hook/event observers, and registers plugin-owned routes with `api.registerHttpRoute`.
 - Dedicated `port` in manifest is informational for operators; actual listen port follows the Gateway unless you front it with a separate listener in core.
 
 ## Endpoints
@@ -38,6 +47,7 @@
 | `GET {path}` | Prometheus text | Scrape target (`Content-Type: text/plain; version=0.0.4`) |
 | `GET {path}/per-object` | JSON | Grouped metrics for tooling |
 | `GET {path}/detailed?family=` | JSON | Filter by substring of metric name |
+| `GET {path}/health` | JSON | Exporter health and latest snapshot status |
 
 Default `{path}` is `/metrics`.
 
@@ -45,16 +55,15 @@ Default `{path}` is `/metrics`.
 
 | Prefix | Source |
 | --- | --- |
-| `openclaw_*` | `health` RPC (gateway uptime, channels, agents, sessions) |
-| `openclaw_channel_*` | `channels.status` |
-| `openclaw_session_*` | `sessions.list` |
-| `openclaw_usage_*` | `usage.cost` → `totals`（时间窗全局汇总，无 provider） |
-| `openclaw_usage_provider_*{provider=""}` | `sessions.usage` → `aggregates.byProvider`（按**模型供应商**拆分的 token / 费用） |
-| `openclaw_presence_*` | `system-presence` |
-| `openclaw_cron_*` | `cron.status` / `cron.list` |
-| `openclaw_model_*` | `models.list` |
-| `openclaw_node_*` | `node.list` |
-| `openclaw_skill_*` | `skills.status` / `skills.bins` |
+| `openclaw_metrics_*` | Exporter-owned route/scrape metrics |
+| `openclaw_model_auth_*` | `api.runtime.modelAuth` |
+| `openclaw_channel_*` | message hooks + `api.runtime.channel.activity.get(...)` |
+| `openclaw_agent_*` | `before_agent_start` / `agent_end` + runtime agent events |
+| `openclaw_tool_*` | `before_tool_call` / `after_tool_call` |
+| `openclaw_messages_*` | `message_received` / `message_sent` |
+| `openclaw_usage_*` | `llm_output` usage aggregation |
+| `openclaw_session_transcript_*` | `api.runtime.events.onSessionTranscriptUpdate(...)` |
+| `openclaw_runtime_*` | runtime namespace availability + state/snapshot age |
 | `openclaw_nodejs_*` | Local process (optional via `includeRuntime`) |
 | `openclaw_exporter_*`, `openclaw_metrics_*` | Plugin meta |
 
@@ -82,7 +91,10 @@ openclaw plugins install @partme.ai/openclaw-prometheus
         "config": {
           "path": "/metrics",
           "collectIntervalMs": 15000,
+          "snapshotIntervalMs": 30000,
+          "workloadWindowMs": 300000,
           "includeRuntime": true,
+          "monitoredProviders": ["openai", "anthropic", "gemini"],
           "scrapeAuth": {
             "enabled": false
           }
@@ -116,7 +128,7 @@ openclaw-prometheus_BEARER_TOKEN=secret pnpm run test:client -- http://127.0.0.1
 
 ## Grafana dashboards
 
-Import JSON from [`grafana/`](./grafana/) (single-node and cluster layouts). See [`grafana/README.md`](./grafana/README.md).
+Import JSON from [`grafana/`](./grafana/) (single-node and cluster layouts). Prometheus handles metrics; Loki handles historical logs. See [`grafana/README.md`](./grafana/README.md).
 
 ## Development
 

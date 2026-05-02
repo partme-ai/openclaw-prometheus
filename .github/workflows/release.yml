@@ -39,6 +39,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build
+        run: pnpm run build
+
       - name: Typecheck
         run: |
           if node -e "const p=require('./package.json'); process.exit(p.scripts&&p.scripts.typecheck?0:1)"; then
@@ -46,9 +49,6 @@ jobs:
           else
             echo "::notice::No typecheck script; skipping."
           fi
-
-      - name: Build
-        run: pnpm run build
 
       - name: Test
         run: |
@@ -100,6 +100,10 @@ jobs:
         if: steps.gate.outputs.private != 'true'
         run: pnpm install --frozen-lockfile
 
+      - name: Build
+        if: steps.gate.outputs.private != 'true'
+        run: pnpm run build
+
       - name: Typecheck
         if: steps.gate.outputs.private != 'true'
         run: |
@@ -108,10 +112,6 @@ jobs:
           else
             echo "::notice::No typecheck script; skipping."
           fi
-
-      - name: Build
-        if: steps.gate.outputs.private != 'true'
-        run: pnpm run build
 
       - name: Test
         if: steps.gate.outputs.private != 'true'

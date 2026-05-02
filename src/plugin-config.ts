@@ -7,7 +7,11 @@ export type PrometheusPluginUserConfig = {
   port?: number;
   path?: string;
   collectIntervalMs?: number;
+  snapshotIntervalMs?: number;
+  workloadWindowMs?: number;
   includeRuntime?: boolean;
+  monitoredProviders?: string[];
+  instance?: string;
   scrapeAuth?: {
     /** 为 true 时要求请求携带 Bearer Token（优先环境变量，见 README） */
     enabled?: boolean;
@@ -20,10 +24,15 @@ export type ResolvedPrometheusConfig = {
   port: number;
   metricsPath: string;
   collectIntervalMs: number;
+  snapshotIntervalMs: number;
+  workloadWindowMs: number;
   includeRuntime: boolean;
+  monitoredProviders: string[];
   scrapeAuthEnabled: boolean;
   /** 解析后的 token：配置项或环境变量 */
   scrapeBearerToken: string | undefined;
+  /** Instance label for multi-deployment */
+  instance: string;
 };
 
 const ENV_BEARER = "openclaw-prometheus_BEARER_TOKEN";
@@ -45,7 +54,20 @@ export function resolvePrometheusConfig(
     typeof c.collectIntervalMs === "number" && c.collectIntervalMs >= 0
       ? c.collectIntervalMs
       : 15000;
+  const snapshotIntervalMs =
+    typeof c.snapshotIntervalMs === "number" && c.snapshotIntervalMs >= 1000
+      ? c.snapshotIntervalMs
+      : 30000;
+  const workloadWindowMs =
+    typeof c.workloadWindowMs === "number" && c.workloadWindowMs >= 60000
+      ? c.workloadWindowMs
+      : 300000;
   const includeRuntime = c.includeRuntime !== false;
+  const monitoredProviders = Array.isArray(c.monitoredProviders)
+    ? c.monitoredProviders
+        .map((value) => (typeof value === "string" ? value.trim() : ""))
+        .filter((value): value is string => value.length > 0)
+    : [];
   const scrapeAuthEnabled = c.scrapeAuth?.enabled === true;
   const fromEnv = env[ENV_BEARER]?.trim();
   const fromConfig =
@@ -56,9 +78,13 @@ export function resolvePrometheusConfig(
     port: typeof c.port === "number" ? c.port : 9090,
     metricsPath,
     collectIntervalMs,
+    snapshotIntervalMs,
+    workloadWindowMs,
     includeRuntime,
+    monitoredProviders,
     scrapeAuthEnabled,
     scrapeBearerToken,
+    instance: c.instance ?? "",
   };
 }
 

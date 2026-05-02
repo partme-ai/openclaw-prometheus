@@ -1,77 +1,33 @@
-### gradle ###
-.gradle
-/build/
-!gradle/wrapper/gradle-wrapper.jar
+# ─── Dependencies ───
+node_modules/
+.pnpm-store/
 
-### STS ###
-.settings/
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-bin/
-codes/
-
-### IntelliJ IDEA ###
-.idea
-*.iws
-*.iml
-*.ipr
-*.gz
-rebel.xml
-
-### NetBeans ###
-nbproject/private/
-build/
-nbbuild/
+# ─── Build artifacts ───
 dist/
-nbdist/
-.nb-gradle/
-log.*/
-logs/
+*.tsbuildinfo
 
-### maven ###
-target/
-*.war
-*.ear
-*.tar
-#*.zip
-*.tar.gz
+# ─── IDE & Editor ───
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
 
-### logs ####
-/logs/
-*.log
-
-### temp ignore ###
-*.cache
-*.diff
-*.patch
-*.tmp
-*.java~
-*.properties~
-*.xml~
-
-### system ignore ###
+# ─── OS ───
 .DS_Store
 Thumbs.db
-Servers
-.metadata
-upload
-gen_code
 
-### node ###
-node_modules
+# ─── OpenClaw runtime state ───
+.omx/
+
+# ─── Backup files ───
+*.bak
+
+# ─── Logs ───
+logs/
+*.log
+
+# ─── Misc ───
 *.tgz
-pom.xml.versionsBackup
-/server/nacos-server/data
-/server/nacos-server/logs
-!/libs/*.jar
-
-.fastRequest
-*.http
-.flattened-pom.xml
-qodana.yaml
-/.vscode/
-/.aliyun/
+*.tmp
+tmp/

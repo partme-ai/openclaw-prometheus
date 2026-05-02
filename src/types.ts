@@ -44,10 +44,63 @@ export interface ServiceDefinition {
 export interface GatewayRuntime {
   /** 当前配置 */
   config: Record<string, unknown>;
-  /** Gateway 调用（如果可用） */
-  gatewayCall?: (method: string, params?: Record<string, unknown>) => Promise<unknown>;
-  /** 通用调用（如果可用） */
-  invoke?: (method: string, params?: Record<string, unknown>) => Promise<unknown>;
+  system?: {
+    runHeartbeatOnce?: (options?: { reason?: string }) => Promise<unknown>;
+  };
+  events?: {
+    onAgentEvent?: (listener: (event: AgentRuntimeEvent) => void) => (() => void) | void;
+    onSessionTranscriptUpdate?: (listener: (update: SessionTranscriptUpdate) => void) => (() => void) | void;
+  };
+  logging?: {
+    getChildLogger?: (bindings?: Record<string, unknown>, opts?: { level?: string }) => RuntimeLogger;
+  };
+  state?: {
+    resolveStateDir?: () => string;
+  };
+  channel?: {
+    activity?: {
+      get?: (params: { channel: string; accountId?: string | null }) => {
+        inboundAt: number | null;
+        outboundAt: number | null;
+      };
+    };
+  };
+  modelAuth?: {
+    resolveApiKeyForProvider?: (params: {
+      provider: string;
+      cfg?: Record<string, unknown>;
+    }) => Promise<ResolvedProviderAuth>;
+  };
+}
+
+export interface RuntimeLogger {
+  info: (message: string, meta?: Record<string, unknown>) => void;
+  warn: (message: string, meta?: Record<string, unknown>) => void;
+  error: (message: string, meta?: Record<string, unknown>) => void;
+  debug?: (message: string, meta?: Record<string, unknown>) => void;
+}
+
+export interface ResolvedProviderAuth {
+  apiKey?: string;
+  profileId?: string;
+  source: string;
+  mode: string;
+}
+
+export interface AgentRuntimeEvent {
+  runId: string;
+  seq: number;
+  stream: string;
+  ts: number;
+  sessionKey?: string;
+  data: Record<string, unknown>;
+}
+
+export interface SessionTranscriptUpdate {
+  sessionFile: string;
+  sessionKey?: string;
+  message?: unknown;
+  messageId?: string;
 }
 
 // ─────────────────── Prometheus 指标类型 ───────────────────
@@ -87,6 +140,21 @@ export interface MetricCollector {
   definitions: MetricDefinition[];
   /** 执行采集 */
   collect(): Promise<MetricSample[]>;
+}
+
+export interface CollectorDiagnostic {
+  collector: string;
+  ok: boolean;
+  error?: string;
+}
+
+export interface MonitoredProviderSnapshot {
+  provider: string;
+  status: "ok" | "missing" | "error";
+  source?: string;
+  mode?: string;
+  checkedAt: number;
+  error?: string;
 }
 
 // ─────────────────── Gateway RPC 响应类型（真实结构） ───────────────────
@@ -211,6 +279,44 @@ export interface CronJob {
   lastRunAt?: number;
   nextRunAt?: number;
   [key: string]: unknown;
+}
+
+export interface ModelAuthWindow {
+  label?: string;
+  usedPercent?: number;
+  resetAt?: number;
+}
+
+export interface ModelAuthProfile {
+  profileId?: string;
+  type?: string;
+  status?: string;
+  expiry?: {
+    at?: number;
+    remainingMs?: number;
+    label?: string;
+  };
+}
+
+export interface ModelAuthProvider {
+  provider?: string;
+  displayName?: string;
+  status?: string;
+  expiry?: {
+    at?: number;
+    remainingMs?: number;
+    label?: string;
+  };
+  profiles?: ModelAuthProfile[];
+  usage?: {
+    windows?: ModelAuthWindow[];
+    plan?: string;
+  };
+}
+
+export interface ModelAuthStatusSnapshot {
+  ts?: number;
+  providers?: ModelAuthProvider[];
 }
 
 /**

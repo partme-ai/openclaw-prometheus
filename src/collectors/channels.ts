@@ -17,6 +17,10 @@ import type {
 import { rpcCall } from "../ws-bridge.js";
 
 const PREFIX = "openclaw_channel";
+const CHANNELS_STATUS_PARAMS = {
+  probe: false,
+  timeoutMs: 8000,
+} as const;
 
 /**
  * Channel 采集器
@@ -41,48 +45,43 @@ export class ChannelCollector implements MetricCollector {
    */
   async collect(): Promise<MetricSample[]> {
     const samples: MetricSample[] = [];
+    const snapshot = await rpcCall<ChannelsStatusSnapshot>("channels.status", CHANNELS_STATUS_PARAMS);
 
-    try {
-      const snapshot = await rpcCall<ChannelsStatusSnapshot>("channels.status");
+    const channels = snapshot.channels ?? {};
+    const labels = snapshot.channelLabels ?? {};
+    const accounts = snapshot.channelAccounts ?? {};
 
-      const channels = snapshot.channels ?? {};
-      const labels = snapshot.channelLabels ?? {};
-      const accounts = snapshot.channelAccounts ?? {};
+    const channelIds = Object.keys(channels);
+    let linkedCount = 0;
 
-      const channelIds = Object.keys(channels);
-      let linkedCount = 0;
+    samples.push({ name: `${PREFIX}_total`, value: channelIds.length });
 
-      samples.push({ name: `${PREFIX}_total`, value: channelIds.length });
+    for (const id of channelIds) {
+      const ch = channels[id];
+      const linked = ch.linked ? 1 : 0;
+      if (linked) linkedCount++;
 
-      for (const id of channelIds) {
-        const ch = channels[id];
-        const linked = ch.linked ? 1 : 0;
-        if (linked) linkedCount++;
+      samples.push({
+        name: `${PREFIX}_linked`,
+        labels: {
+          channel_id: id,
+          channel_type: ch.type ?? "unknown",
+          channel_label: labels[id] ?? id,
+        },
+        value: linked,
+      });
 
-        samples.push({
-          name: `${PREFIX}_linked`,
-          labels: {
-            channel_id: id,
-            channel_type: ch.type ?? "unknown",
-            channel_label: labels[id] ?? id,
-          },
-          value: linked,
-        });
-
-        // 账号数
-        const accts = accounts[id];
-        samples.push({
-          name: `${PREFIX}_accounts`,
-          labels: { channel_id: id },
-          value: Array.isArray(accts) ? accts.length : 0,
-        });
-      }
-
-      samples.push({ name: `${PREFIX}_linked_total`, value: linkedCount });
-      samples.push({ name: `${PREFIX}_unlinked_total`, value: channelIds.length - linkedCount });
-    } catch {
-      samples.push({ name: `${PREFIX}_total`, value: 0 });
+      // 账号数
+      const accts = accounts[id];
+      samples.push({
+        name: `${PREFIX}_accounts`,
+        labels: { channel_id: id },
+        value: Array.isArray(accts) ? accts.length : 0,
+      });
     }
+
+    samples.push({ name: `${PREFIX}_linked_total`, value: linkedCount });
+    samples.push({ name: `${PREFIX}_unlinked_total`, value: channelIds.length - linkedCount });
 
     return samples;
   }

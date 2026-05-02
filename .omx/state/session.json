@@ -1,0 +1,9 @@
+{
+  "session_id": "omx-1776592965583-dk9ole",
+  "started_at": "2026-04-19T10:02:46.485Z",
+  "cwd": "/home/wandl/workspaces/workspace-partme-ai/openclaw-plugins/openclaw-prometheus",
+  "pid": 1300679,
+  "platform": "linux",
+  "pid_start_ticks": 8012963,
+  "pid_cmdline": "node /home/wandl/.config/nvm/versions/node/v24.14.1/bin/omx"
+}
