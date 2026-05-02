@@ -1,5 +1,6 @@
 import type { MetricCollector, MetricDefinition, MetricSample } from "../types.js";
 import { rpcCall } from "../ws-bridge.js";
+import { sanitizeLabel } from "../utils.js";
 
 const PREFIX = "openclaw_usage";
 
@@ -128,6 +129,11 @@ export class UsageCollector implements MetricCollector {
     labeledDef(`${PREFIX}_model_requests_total`, "Usage entries grouped by provider/model", ["provider", "model"]),
     labeledDef(`${PREFIX}_model_tokens_total`, "Total tokens grouped by provider/model", ["provider", "model"]),
     labeledDef(`${PREFIX}_model_cost_usd_total`, "Estimated cost grouped by provider/model", ["provider", "model"]),
+    labeledDef(`${PREFIX}_model_tokens_input_total`, "Input tokens grouped by provider/model", ["provider", "model"]),
+    labeledDef(`${PREFIX}_model_tokens_output_total`, "Output tokens grouped by provider/model", ["provider", "model"]),
+    labeledDef(`${PREFIX}_model_tokens_cache_read_total`, "Cache-read tokens grouped by provider/model", ["provider", "model"]),
+    labeledDef(`${PREFIX}_model_tokens_cache_write_total`, "Cache-write tokens grouped by provider/model", ["provider", "model"]),
+    labeledDef(`${PREFIX}_model_missing_cost_entries_total`, "Missing cost entries grouped by provider/model", ["provider", "model"]),
     labeledDef(`${PREFIX}_agent_tokens_total`, "Total tokens grouped by agent", ["agent_id"]),
     labeledDef(`${PREFIX}_agent_cost_usd_total`, "Estimated cost grouped by agent", ["agent_id"]),
     labeledDef(`${PREFIX}_channel_tokens_total`, "Total tokens grouped by channel", ["channel"]),
@@ -207,10 +213,6 @@ function def(name: string, help: string): MetricDefinition {
 
 function labeledDef(name: string, help: string, labels: string[]): MetricDefinition {
   return { name, help, type: "gauge", labels };
-}
-
-function sanitizeLabel(raw: string): string {
-  return (String(raw).trim() || "unknown").replace(/["\\\n]/g, "_").slice(0, 128);
 }
 
 function normalizeTotals(totals: CostTotalsShape | undefined) {
@@ -308,6 +310,8 @@ function appendDimensionSamples(
     return;
   }
   for (const row of rows) {
+    const provider = String(row.provider ?? "unknown");
+    if (provider === "openclaw") continue;
     const labels: Record<string, string> = {};
     for (const key of labelKeys) {
       labels[key] = sanitizeLabel(String((row as Record<string, unknown>)[key] ?? "unknown"));
@@ -467,9 +471,11 @@ function appendModelDailySamples(
     return;
   }
   for (const row of rows) {
+    const provider = sanitizeLabel(row.provider || "unknown");
+    if (provider === "openclaw") continue;
     const labels = {
       date: sanitizeLabel(row.date || "unknown"),
-      provider: sanitizeLabel(row.provider || "unknown"),
+      provider,
       model: sanitizeLabel(row.model || "unknown"),
     };
     samples.push({ name: `${PREFIX}_model_daily_requests_total`, labels, value: num(row.count) });

@@ -16,6 +16,7 @@
 
 import type { MetricCollector, MetricDefinition, MetricSample, SessionEntry } from "../types.js";
 import { rpcCall } from "../ws-bridge.js";
+import { sanitizeLabel } from "../utils.js";
 
 const PREFIX = "openclaw_session";
 const SESSIONS_LIST_PARAMS = {
@@ -134,8 +135,4 @@ function normalizeSessions(result: unknown): SessionEntry[] {
 
 function numberValue(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
-}
-
-function sanitizeLabel(raw: string): string {
-  return String(raw).trim().replace(/["\\\n]/g, "_").slice(0, 128) || "unknown";
 }

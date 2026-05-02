@@ -24,7 +24,7 @@ export class NodeCollector implements MetricCollector {
 
   definitions: MetricDefinition[] = [
     { name: `${PREFIX}_total`, help: "Total paired nodes", type: "gauge" },
-    { name: `${PREFIX}_connected_total`, help: "Currently connected nodes", type: "gauge" },
+    { name: `${PREFIX}_connected`, help: "Currently connected nodes", type: "gauge" },
     { name: `${PREFIX}_by_platform`, help: "Nodes per platform", type: "gauge", labels: ["platform"] },
   ];
 
@@ -46,7 +46,7 @@ export class NodeCollector implements MetricCollector {
     const connectedCount = nodes.filter((n) => n.connected).length;
 
     samples.push({ name: `${PREFIX}_total`, value: nodes.length });
-    samples.push({ name: `${PREFIX}_connected_total`, value: connectedCount });
+    samples.push({ name: `${PREFIX}_connected`, value: connectedCount });
 
     // 按平台
     const byPlatform: Record<string, number> = {};

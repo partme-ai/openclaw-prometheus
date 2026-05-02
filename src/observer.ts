@@ -1,5 +1,5 @@
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
-
+import type { MetricSample } from "./types.js";
 import { getRuntimeStore, listObservedChannelAccounts, rememberObservedChannelAccount, setSnapshotState } from "./runtime-store.js";
 
 const PROVIDER_STATUSES = ["ok", "missing", "error"] as const;
@@ -22,7 +22,7 @@ function registerLifecycleHooks(api: OpenClawPluginApi): void {
     const { registry, cfg } = getRuntimeStore();
     registry.set("openclaw_ready", 1, {
       help: "Whether the plugin observed gateway_start and considers the exporter ready",
-      labels: { instance: cfg.instance ?? "default" },
+      labels: { instance: cfg.instance || "default" },
     });
   });
 
@@ -30,7 +30,7 @@ function registerLifecycleHooks(api: OpenClawPluginApi): void {
     const { registry, cfg } = getRuntimeStore();
     registry.set("openclaw_ready", 0, {
       help: "Whether the plugin observed gateway_start and considers the exporter ready",
-      labels: { instance: cfg.instance ?? "default" },
+      labels: { instance: cfg.instance || "default" },
     });
   });
 
@@ -66,7 +66,7 @@ function registerMessageHooks(api: OpenClawPluginApi): void {
     const channelId = stringOr(ctx.channelId, "unknown");
     const accountId = optionalString(ctx.accountId);
     rememberObservedChannelAccount(channelId, accountId);
-    registry.inc("openclaw_messages_received_total", 1, {
+    registry.inc("openclaw_session_messages_received_total", 1, {
       help: "Inbound messages observed through plugin hooks",
       type: "counter",
       labels: { channel: channelId },
@@ -85,7 +85,7 @@ function registerMessageHooks(api: OpenClawPluginApi): void {
     const channelId = stringOr(ctx.channelId, "unknown");
     const accountId = optionalString(ctx.accountId);
     rememberObservedChannelAccount(channelId, accountId);
-    registry.inc("openclaw_messages_sent_total", 1, {
+    registry.inc("openclaw_session_messages_sent_total", 1, {
       help: "Outbound messages observed through plugin hooks",
       type: "counter",
       labels: {
@@ -223,12 +223,18 @@ function registerAgentHooks(api: OpenClawPluginApi): void {
         result: event.success ? "ok" : "error",
       },
     });
+    if (!event.success) {
+      registry.inc("openclaw_agent_runs_failed_total", 1, {
+        help: "Agent run failures observed through plugin hooks (no result label to avoid cardinality explosion)",
+        type: "counter",
+        labels: { agent_id: agentId },
+      });
+    }
     if (typeof event.durationMs === "number") {
       registry.observeHistogram("openclaw_agent_run_duration_seconds", event.durationMs / 1000, {
         help: "Observed agent run duration",
         labels: {
           agent_id: agentId,
-          result: event.success ? "ok" : "error",
         },
       });
     }
@@ -237,39 +243,47 @@ function registerAgentHooks(api: OpenClawPluginApi): void {
 
 function registerRuntimeEventListeners(api: OpenClawPluginApi): void {
   api.runtime.events?.onAgentEvent?.((event) => {
-    const { registry } = getRuntimeStore();
-    registry.inc("openclaw_agent_events_total", 1, {
-      help: "Agent runtime events observed through api.runtime.events.onAgentEvent",
-      type: "counter",
-      labels: { stream: event.stream },
-    });
-
-    if (event.stream === "item") {
-      const kind = typeof event.data.kind === "string" ? event.data.kind : "unknown";
-      const phase = typeof event.data.phase === "string" ? event.data.phase : "unknown";
-      const status = typeof event.data.status === "string" ? event.data.status : "unknown";
-      registry.inc("openclaw_agent_item_events_total", 1, {
-        help: "Agent item events grouped by kind/status/phase",
+    try {
+      const { registry } = getRuntimeStore();
+      registry.inc("openclaw_agent_events_total", 1, {
+        help: "Agent runtime events observed through api.runtime.events.onAgentEvent",
         type: "counter",
-        labels: { kind, phase, status },
+        labels: { stream: event.stream },
       });
+
+      if (event.stream === "item") {
+        const kind = typeof event.data.kind === "string" ? event.data.kind : "unknown";
+        const phase = typeof event.data.phase === "string" ? event.data.phase : "unknown";
+        const status = typeof event.data.status === "string" ? event.data.status : "unknown";
+        registry.inc("openclaw_agent_item_events_total", 1, {
+          help: "Agent item events grouped by kind/status/phase",
+          type: "counter",
+          labels: { kind, phase, status },
+        });
+      }
+    } catch {
+      // 静默吞下 listener 异常，避免中断事件流
     }
   });
 
   api.runtime.events?.onSessionTranscriptUpdate?.((update) => {
-    const { registry } = getRuntimeStore();
-    registry.inc("openclaw_session_transcript_updates_total", 1, {
-      help: "Session transcript updates observed through api.runtime.events.onSessionTranscriptUpdate",
-      type: "counter",
-    });
-    registry.set("openclaw_session_transcript_last_update_timestamp_seconds", Date.now() / 1000, {
-      help: "Last transcript update timestamp observed by the plugin",
-    });
-    if (update.sessionKey) {
-      registry.set("openclaw_session_transcript_last_seen_timestamp_seconds", Date.now() / 1000, {
-        help: "Last transcript update timestamp by session key",
-        labels: { scope: "aggregate" },
+    try {
+      const { registry } = getRuntimeStore();
+      registry.inc("openclaw_session_transcript_updates_total", 1, {
+        help: "Session transcript updates observed through api.runtime.events.onSessionTranscriptUpdate",
+        type: "counter",
       });
+      registry.set("openclaw_session_transcript_last_update_timestamp_seconds", Date.now() / 1000, {
+        help: "Last transcript update timestamp observed by the plugin",
+      });
+      if (update.sessionKey) {
+        registry.set("openclaw_session_transcript_last_seen_timestamp_seconds", Date.now() / 1000, {
+          help: "Last transcript update timestamp by session key",
+          labels: { scope: "aggregate" },
+        });
+      }
+    } catch {
+      // 静默吞下 listener 异常
     }
   });
 }
@@ -332,7 +346,7 @@ function registerSupplementaryPluginHooks(api: OpenClawPluginApi): void {
     const images =
       typeof event?.imagesCount === "number" && event.imagesCount > 0 ? event.imagesCount : 0;
     if (images > 0) {
-      registry.inc("openclaw_llm_input_images_total", images, {
+      registry.inc("openclaw_model_llm_input_images_total", images, {
         help: "Images attached to LLM inputs observed through llm_input hooks",
         type: "counter",
         labels: { provider, model },
@@ -418,7 +432,7 @@ function registerSupplementaryPluginHooks(api: OpenClawPluginApi): void {
     incHookInvocation("subagent_ended");
     const { registry } = getRuntimeStore();
     const outcome = typeof event?.outcome === "string" ? event.outcome : "unknown";
-    registry.inc("openclaw_subagent_ended_total", 1, {
+    registry.inc("openclaw_agent_subagent_ended_total", 1, {
       help: "Subagent ended events by outcome",
       type: "counter",
       labels: { outcome },
@@ -523,11 +537,11 @@ export function refreshHousekeepingMetrics(): void {
   const { registry, cfg } = store;
   registry.set("openclaw_up", 1, {
     help: "Whether the OpenClaw Prometheus plugin is loaded",
-    labels: { instance: cfg.instance ?? "default" },
+    labels: { instance: cfg.instance || "default" },
   });
   registry.set("openclaw_ready", 1, {
     help: "Whether the OpenClaw Prometheus plugin runtime is initialized",
-    labels: { instance: cfg.instance ?? "default" },
+    labels: { instance: cfg.instance || "default" },
   });
   registry.set("openclaw_plugin_uptime_seconds", (Date.now() - store.startedAt) / 1000, {
     help: "Plugin uptime in seconds",
@@ -648,11 +662,11 @@ export function refreshSliMetrics(): void {
   const { registry } = store;
 
   // SLI 1: 消息投递成功率
-  const msgOk = sumSamplesByLabel(registry.getSamplesByName("openclaw_messages_sent_total"), "result", "ok");
-  const msgErr = sumSamplesByLabel(registry.getSamplesByName("openclaw_messages_sent_total"), "result", "error");
+  const msgOk = sumSamplesByLabel(registry.getSamplesByName("openclaw_session_messages_sent_total"), "result", "ok");
+  const msgErr = sumSamplesByLabel(registry.getSamplesByName("openclaw_session_messages_sent_total"), "result", "error");
   const msgTotal = msgOk + msgErr;
   registry.set("openclaw_sli_message_success_ratio", msgTotal > 0 ? msgOk / msgTotal : 1, {
-    help: "Message delivery success ratio (0~1). Source: openclaw_messages_sent_total{result}.",
+    help: "Message delivery success ratio (0~1). Source: openclaw_session_messages_sent_total{result}.",
   });
 
   // SLI 2: Agent 错误率
@@ -670,8 +684,8 @@ export function refreshSliMetrics(): void {
   });
 
   // SLI 4: 渠道健康率（从 rpcSamples 线性查找——RPC 样本量小，可接受）
-  const channelLinked = store.rpcSamples.find((s: any) => s.name === "openclaw_channel_linked_total")?.value ?? 0;
-  const channelTotal = store.rpcSamples.find((s: any) => s.name === "openclaw_channel_total")?.value ?? 0;
+  const channelLinked = store.rpcSamples.find((s: MetricSample) => s.name === "openclaw_channel_linked_total")?.value ?? 0;
+  const channelTotal = store.rpcSamples.find((s: MetricSample) => s.name === "openclaw_channel_total")?.value ?? 0;
   registry.set("openclaw_sli_channel_health_ratio", channelTotal > 0 ? channelLinked / channelTotal : 1, {
     help: "Channel health ratio (0~1). Source: openclaw_channel_linked_total / openclaw_channel_total (RPC).",
   });

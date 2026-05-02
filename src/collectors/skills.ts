@@ -23,11 +23,8 @@ export class SkillCollector implements MetricCollector {
 
   definitions: MetricDefinition[] = [
     { name: `${PREFIX}_total`, help: "Total registered skills", type: "gauge" },
-    { name: `${PREFIX}_bins_total`, help: "Total skill binaries installed", type: "gauge" },
-    { name: `${PREFIX}_enabled_total`, help: "Enabled skills", type: "gauge" },
-    { name: `${PREFIX}_disabled_total`, help: "Disabled skills", type: "gauge" },
-    { name: `${PREFIX}_eligible_total`, help: "Eligible skills", type: "gauge" },
-    { name: `${PREFIX}_blocked_total`, help: "Skills blocked by allowlist", type: "gauge" },
+    { name: `${PREFIX}_active_total`, help: "Active skills", type: "gauge" },
+    { name: `${PREFIX}_by_category`, help: "Skills per category", type: "gauge", labels: ["category"] },
   ];
 
   /**
@@ -45,30 +42,18 @@ export class SkillCollector implements MetricCollector {
       : [];
     const skillCount = typeof statusObj.count === "number" ? statusObj.count : skills.length;
     const enabledCount = skills.filter((skill) => skill.disabled !== true).length;
-    const blockedCount = skills.filter((skill) => skill.blockedByAllowlist === true).length;
-    const eligibleCount = skills.filter((skill) => skill.eligible !== false).length;
 
     samples.push({ name: `${PREFIX}_total`, value: skillCount });
-    samples.push({ name: `${PREFIX}_enabled_total`, value: enabledCount });
-    samples.push({ name: `${PREFIX}_disabled_total`, value: Math.max(skillCount - enabledCount, 0) });
-    samples.push({ name: `${PREFIX}_eligible_total`, value: eligibleCount });
-    samples.push({ name: `${PREFIX}_blocked_total`, value: blockedCount });
+    samples.push({ name: `${PREFIX}_active_total`, value: enabledCount });
 
-    let binCount = 0;
-    try {
-      const binsResult = await rpcCall<unknown>("skills.bins");
-      if (Array.isArray(binsResult)) {
-        binCount = binsResult.length;
-      } else if (binsResult && typeof binsResult === "object") {
-        const obj = binsResult as Record<string, unknown>;
-        if (Array.isArray(obj.bins)) {
-          binCount = obj.bins.length;
-        }
-      }
-    } catch {
-      // 某些角色无权访问 skills.bins；保留 skills.status 主体指标，bins_total 回退为 0。
+    const byCategory: Record<string, number> = {};
+    for (const skill of skills) {
+      const category = String((skill as Record<string, unknown>).category ?? "unknown");
+      byCategory[category] = (byCategory[category] ?? 0) + 1;
     }
-    samples.push({ name: `${PREFIX}_bins_total`, value: binCount });
+    for (const [category, count] of Object.entries(byCategory)) {
+      samples.push({ name: `${PREFIX}_by_category`, labels: { category }, value: count });
+    }
 
     return samples;
   }

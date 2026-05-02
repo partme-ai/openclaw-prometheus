@@ -10,6 +10,10 @@ import { GatewayClient } from "openclaw/plugin-sdk/gateway-runtime";
 import type { GatewayRuntime } from "./types.js";
 import { recordRpcError, recordRpcSuccess, setRpcClientInitialized } from "./runtime-store.js";
 
+const CONNECT_TIMEOUT_MS = 15_000;
+const MAX_RECONNECT_ATTEMPTS = 3;
+const RECONNECT_DELAY_MS = 5_000;
+
 /** 缓存的 Gateway Runtime 引用 */
 let _runtime: GatewayRuntime | null = null;
 let _gatewayClient: GatewayClient | null = null;
@@ -94,8 +98,32 @@ async function getGatewayClient(): Promise<GatewayClient> {
   const url = resolveGatewayUrl(gateway);
   const connect = resolveGatewayConnect(gateway);
 
-  _gatewayReadyPromise = new Promise<GatewayClient>((resolve, reject) => {
+  _gatewayReadyPromise = connectWithRetry(url, connect, 0);
+
+  return _gatewayReadyPromise;
+}
+
+async function connectWithRetry(
+  url: string,
+  connect: Record<string, unknown>,
+  attempt: number,
+): Promise<GatewayClient> {
+  return new Promise<GatewayClient>((resolve, reject) => {
     let settled = false;
+    const timeoutId = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        cleanup();
+        const err = new Error(
+          `[openclaw-prometheus] Gateway connection timeout after ${CONNECT_TIMEOUT_MS}ms at ${url}`
+        );
+        handleConnectionFailure(err, url, connect, attempt, reject);
+      }
+    }, CONNECT_TIMEOUT_MS);
+
+    const cleanup = () => {
+      clearTimeout(timeoutId);
+    };
 
     const client = new GatewayClient({
       url,
@@ -104,31 +132,56 @@ async function getGatewayClient(): Promise<GatewayClient> {
       onHelloOk: () => {
         if (!settled) {
           settled = true;
+          cleanup();
           setRpcClientInitialized(true);
           resolve(client);
         }
       },
       onConnectError: (error) => {
-        setRpcClientInitialized(false);
-        _gatewayClient = null;
-        _gatewayReadyPromise = null;
         if (!settled) {
           settled = true;
-          reject(error);
+          cleanup();
+          setRpcClientInitialized(false);
+          handleConnectionFailure(error, url, connect, attempt, reject);
         }
       },
       onClose: () => {
         setRpcClientInitialized(false);
+        // 不清空 _gatewayReadyPromise，让下次 rpcCall 触发重连
         _gatewayClient = null;
-        _gatewayReadyPromise = null;
       },
     });
 
     _gatewayClient = client;
     client.start();
   });
+}
 
-  return _gatewayReadyPromise;
+function handleConnectionFailure(
+  error: unknown,
+  url: string,
+  connect: Record<string, unknown>,
+  attempt: number,
+  reject: (reason: Error) => void,
+): void {
+  _gatewayClient = null;
+  _gatewayReadyPromise = null;
+
+  const nextAttempt = attempt + 1;
+  if (nextAttempt < MAX_RECONNECT_ATTEMPTS) {
+    // 延迟后重试
+    setTimeout(() => {
+      _gatewayReadyPromise = connectWithRetry(url, connect, nextAttempt);
+      // 重连 Promise 静默替换，下次 rpcCall 会使用新的
+    }, RECONNECT_DELAY_MS);
+    reject(new Error(
+      `[openclaw-prometheus] Gateway connection failed (attempt ${nextAttempt}/${MAX_RECONNECT_ATTEMPTS}), retrying in ${RECONNECT_DELAY_MS}ms...`
+    ));
+  } else {
+    reject(new Error(
+      `[openclaw-prometheus] Gateway connection failed after ${MAX_RECONNECT_ATTEMPTS} attempts: ${String(error)}`
+    ));
+  }
 }
 
 function readGatewayConfig(config: Record<string, unknown>): Record<string, unknown> {

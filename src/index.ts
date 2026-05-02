@@ -571,7 +571,7 @@ async function withRouteMetrics(
       labels,
     });
     const durationSeconds = (performance.now() - startedAt) / 1000;
-    registry.observeSummary("openclaw_metrics_http_request_duration_seconds", durationSeconds, {
+    registry.observeHistogram("openclaw_metrics_http_request_duration_seconds", durationSeconds, {
       help: "HTTP request duration served by the Prometheus plugin routes",
       labels: {
         route: routePath,

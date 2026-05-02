@@ -14,6 +14,7 @@
 
 import type { MetricCollector, MetricDefinition, MetricSample, CronStatus, CronJob } from "../types.js";
 import { rpcCall } from "../ws-bridge.js";
+import { sanitizeLabel } from "../utils.js";
 
 const PREFIX = "openclaw_cron";
 const CRON_LIST_PARAMS = {
@@ -34,13 +35,14 @@ export class CronCollector implements MetricCollector {
 
   definitions: MetricDefinition[] = [
     { name: `${PREFIX}_scheduler_enabled`, help: "Cron scheduler enabled (1=yes, 0=no)", type: "gauge" },
-    { name: `${PREFIX}_jobs_total`, help: "Total registered cron jobs", type: "gauge" },
-    { name: `${PREFIX}_jobs_enabled`, help: "Enabled cron jobs", type: "gauge" },
-    { name: `${PREFIX}_jobs_disabled`, help: "Disabled cron jobs", type: "gauge" },
-    { name: `${PREFIX}_jobs_errors_total`, help: "Cron jobs whose last run failed", type: "gauge" },
-    { name: `${PREFIX}_jobs_running_total`, help: "Cron jobs currently running", type: "gauge" },
-    { name: `${PREFIX}_next_wake_in_seconds`, help: "Seconds until next cron wake", type: "gauge" },
-    { name: `${PREFIX}_next_run_in_seconds`, help: "Soonest next run among listed cron jobs", type: "gauge" },
+    { name: `${PREFIX}_total`, help: "Total registered cron jobs", type: "gauge" },
+    { name: `${PREFIX}_running`, help: "Cron jobs currently running", type: "gauge" },
+    { name: `${PREFIX}_overdue_seconds`, help: "Cron job overdue seconds (>0 means delayed)", type: "gauge", labels: ["job"] },
+    { name: `${PREFIX}_last_duration_seconds`, help: "Last cron job execution duration in seconds", type: "gauge", labels: ["job"] },
+    { name: `${PREFIX}_last_result`, help: "Last cron job result (1=ok, 0=error)", type: "gauge", labels: ["job"] },
+    { name: `${PREFIX}_last_start_timestamp_seconds`, help: "Last cron job start timestamp", type: "gauge", labels: ["job"] },
+    { name: `${PREFIX}_last_end_timestamp_seconds`, help: "Last cron job end timestamp", type: "gauge", labels: ["job"] },
+    { name: `${PREFIX}_consecutive_failures_total`, help: "Consecutive failures for a cron job", type: "gauge", labels: ["job"] },
   ];
 
   /**
@@ -64,43 +66,52 @@ export class CronCollector implements MetricCollector {
       typeof (listResult as { total?: unknown })?.total === "number"
         ? ((listResult as { total: number }).total)
         : status.jobCount ?? jobs.length;
-    const enabledJobs = jobs.filter((j) => j.enabled !== false).length;
     const runningJobs = jobs.filter((j) => {
       const state = j.state as Record<string, unknown> | undefined;
       return state?.running === true;
     }).length;
-    const erroredJobs = jobs.filter((j) => {
-      const state = j.state as Record<string, unknown> | undefined;
-      return (
-        state?.lastRunStatus === "error" ||
-        state?.lastStatus === "error" ||
-        typeof state?.consecutiveErrors === "number" && state.consecutiveErrors > 0
-      );
-    }).length;
 
-    samples.push({ name: `${PREFIX}_jobs_total`, value: totalJobs });
-    samples.push({ name: `${PREFIX}_jobs_enabled`, value: enabledJobs });
-    samples.push({ name: `${PREFIX}_jobs_disabled`, value: Math.max(totalJobs - enabledJobs, 0) });
-    samples.push({ name: `${PREFIX}_jobs_errors_total`, value: erroredJobs });
-    samples.push({ name: `${PREFIX}_jobs_running_total`, value: runningJobs });
+    samples.push({ name: `${PREFIX}_total`, value: totalJobs });
+    samples.push({ name: `${PREFIX}_running`, value: runningJobs });
 
-    const nextWakeAt = numberLike((status as Record<string, unknown>).nextWakeAtMs)
-      || numberLike((status as Record<string, unknown>).nextWakeTime);
-    if (nextWakeAt > 0) {
-      samples.push({
-        name: `${PREFIX}_next_wake_in_seconds`,
-        value: Math.max(0, Math.round((nextWakeAt - Date.now()) / 1000)),
-      });
-    }
+    for (const job of jobs) {
+      const jobName = sanitizeLabel(String((job as Record<string, unknown>).name ?? (job as Record<string, unknown>).id ?? "unknown"));
+      const state = (job as Record<string, unknown>).state as Record<string, unknown> | undefined;
 
-    const nextRuns = jobs
-      .map((job) => numberLike((job as Record<string, unknown>).nextRunAtMs) || numberLike((job as Record<string, unknown>).nextRunAt))
-      .filter((value) => value > 0);
-    if (nextRuns.length > 0) {
-      samples.push({
-        name: `${PREFIX}_next_run_in_seconds`,
-        value: Math.max(0, Math.round((Math.min(...nextRuns) - Date.now()) / 1000)),
-      });
+      if (state) {
+        const lastDurationMs = numberLike(state.lastDurationMs) || numberLike(state.lastRunDurationMs);
+        if (lastDurationMs > 0) {
+          samples.push({ name: `${PREFIX}_last_duration_seconds`, labels: { job: jobName }, value: lastDurationMs / 1000 });
+        }
+
+        const lastRunStatus = state.lastRunStatus ?? state.lastStatus;
+        if (typeof lastRunStatus === "string") {
+          samples.push({ name: `${PREFIX}_last_result`, labels: { job: jobName }, value: lastRunStatus === "ok" ? 1 : 0 });
+        }
+
+        const lastStartAt = numberLike(state.lastStartAtMs) || numberLike(state.lastRunAtMs);
+        if (lastStartAt > 0) {
+          samples.push({ name: `${PREFIX}_last_start_timestamp_seconds`, labels: { job: jobName }, value: lastStartAt / 1000 });
+        }
+
+        const lastEndAt = numberLike(state.lastEndAtMs);
+        if (lastEndAt > 0) {
+          samples.push({ name: `${PREFIX}_last_end_timestamp_seconds`, labels: { job: jobName }, value: lastEndAt / 1000 });
+        }
+
+        const consecutiveErrors = numberLike(state.consecutiveErrors);
+        if (consecutiveErrors > 0) {
+          samples.push({ name: `${PREFIX}_consecutive_failures_total`, labels: { job: jobName }, value: consecutiveErrors });
+        }
+
+        const nextRunAt = numberLike((job as Record<string, unknown>).nextRunAtMs) || numberLike((job as Record<string, unknown>).nextRunAt);
+        if (nextRunAt > 0) {
+          const overdueSeconds = (Date.now() - nextRunAt) / 1000;
+          if (overdueSeconds > 0) {
+            samples.push({ name: `${PREFIX}_overdue_seconds`, labels: { job: jobName }, value: overdueSeconds });
+          }
+        }
+      }
     }
 
     return samples;

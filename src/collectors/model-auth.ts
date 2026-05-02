@@ -7,6 +7,7 @@ import type {
   ModelAuthWindow,
 } from "../types.js";
 import { rpcCall } from "../ws-bridge.js";
+import { sanitizeLabel } from "../utils.js";
 
 const PREFIX = "openclaw_model_auth";
 const PROVIDER_STATUSES = ["ok", "expiring", "expired", "missing", "static"] as const;
@@ -164,6 +165,3 @@ function appendUsageWindowSamples(
   }
 }
 
-function sanitizeLabel(raw: string): string {
-  return String(raw).trim().replace(/["\\\n]/g, "_").slice(0, 128) || "unknown";
-}

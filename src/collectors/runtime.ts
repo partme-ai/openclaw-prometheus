@@ -44,9 +44,23 @@ export class RuntimeCollector implements MetricCollector {
   private lastCheck = Date.now();
   /** 定时器引用 */
   private timer: ReturnType<typeof setTimeout> | null = null;
+  /** 是否已销毁 */
+  private _disposed = false;
 
   constructor() {
     this.startEventLoopMeasure();
+  }
+
+  /**
+   * 停止事件循环测量并清理定时器。
+   * 插件热更新或 reload 时应调用此方法，避免内存泄漏。
+   */
+  dispose(): void {
+    this._disposed = true;
+    if (this.timer !== null) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
   }
 
   /**
@@ -55,6 +69,7 @@ export class RuntimeCollector implements MetricCollector {
    */
   private startEventLoopMeasure(): void {
     const measure = () => {
+      if (this._disposed) return;
       const now = Date.now();
       const expected = 100;
       const actual = now - this.lastCheck;

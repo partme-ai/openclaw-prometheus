@@ -2,7 +2,7 @@
   "id": "openclaw-prometheus",
   "name": "openclaw-prometheus",
   "version": "0.3.0",
-  "description": "Prometheus metrics exporter for OpenClaw Gateway - based on real Gateway RPC methods (health, sessions.list, channels.status, usage, presence, cron, models, nodes, skills)",
+  "description": "Prometheus metrics exporter for OpenClaw Gateway - built on official plugin SDK runtime, hooks, events, and plugin-owned routes",
   "main": "dist/index.js",
   "channels": [],
   "commands": [],
@@ -25,10 +25,33 @@
         "default": 15000,
         "description": "Metrics collection interval"
       },
+      "snapshotIntervalMs": {
+        "type": "number",
+        "default": 30000,
+        "description": "Runtime snapshot refresh interval for model auth and channel activity probes"
+      },
+      "workloadWindowMs": {
+        "type": "number",
+        "default": 300000,
+        "description": "Rolling workload observation window in milliseconds"
+      },
       "includeRuntime": {
         "type": "boolean",
         "default": true,
         "description": "Include Node.js runtime metrics"
+      },
+      "monitoredProviders": {
+        "type": "array",
+        "description": "Provider ids to check via api.runtime.modelAuth.resolveApiKeyForProvider",
+        "items": {
+          "type": "string"
+        },
+        "default": []
+      },
+      "instance": {
+        "type": "string",
+        "default": "",
+        "description": "Instance label for multi-deployment (e.g., pod name, hostname)"
       },
       "scrapeAuth": {
         "type": "object",
@@ -60,9 +83,20 @@
       "label": "Collect Interval (ms)",
       "placeholder": "15000"
     },
+    "snapshotIntervalMs": {
+      "label": "Snapshot Interval (ms)",
+      "placeholder": "30000"
+    },
+    "workloadWindowMs": {
+      "label": "Workload Window (ms)",
+      "placeholder": "300000"
+    },
     "includeRuntime": {
       "label": "Include Runtime Metrics",
       "type": "toggle"
+    },
+    "monitoredProviders": {
+      "label": "Monitored Providers"
     },
     "scrapeAuth.enabled": {
       "label": "Scrape auth (Bearer)",

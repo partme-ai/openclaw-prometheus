@@ -2,19 +2,7 @@ import type { MetricDefinition, MetricSample, MetricType } from "./types.js";
 
 type LabelValues = Record<string, string>;
 
-// ─────────── hot-path 优化：避免 JSON.stringify + 排序 ───────────
-
-/** 缓存排序后的 label keys，避免每次 inc/set 重复排序 */
-const labelKeyCache = new WeakMap<LabelValues, string>();
-
-function sortedLabelKeys(labels: LabelValues): string {
-  const cached = labelKeyCache.get(labels);
-  if (cached !== undefined) return cached;
-  const keys = Object.keys(labels).sort();
-  const joined = keys.join(",");
-  labelKeyCache.set(labels, joined);
-  return joined;
-}
+// ─────────── hot-path 优化：NUL 分隔 sample key，避免 JSON.stringify ───────────
 
 /**
  * 生成高效的 sample key。
