@@ -1,72 +1,17 @@
-# openclaw-prometheus Configuration Example
-# Copy this file to config/prometheus.yaml and customize
+# openclaw-prometheus Configuration Example — v0.3.0
 
 port: 9090
 path: /metrics
-
-# Metrics collection interval (default: 15s)
 collectIntervalMs: 15000
-
-# Runtime snapshot refresh interval for model auth and channel activity probes (default: 30s)
 snapshotIntervalMs: 30000
-
-# Rolling workload observation window (default: 5m)
 workloadWindowMs: 300000
-
-# Include Node.js runtime metrics (default: true)
 includeRuntime: true
 
-# Provider ids to check via api.runtime.modelAuth.resolveApiKeyForProvider
 monitoredProviders:
   - openai
   - anthropic
-  - cohere
 
-# Instance label for multi-deployment (e.g., pod name, hostname)
 instance: ""
 
-# HTTP scrape authentication
 scrapeAuth:
   enabled: false
-  headerName: Authorization
-
-# Histogram bucket configuration (optional)
-histogramBuckets:
-  agent_run_duration_seconds:
-    - 0.001
-    - 0.005
-    - 0.01
-    - 0.025
-    - 0.05
-    - 0.1
-    - 0.25
-    - 0.5
-    - 1
-    - 2.5
-    - 5
-    - 10
-    - 30
-    - 60
-    - 120
-    - 300
-  tool_call_duration_seconds:
-    - 0.001
-    - 0.005
-    - 0.01
-    - 0.025
-    - 0.05
-    - 0.1
-    - 0.25
-    - 0.5
-    - 1
-    - 2.5
-    - 5
-    - 10
-    - 30
-    - 60
-    - 120
-    - 300
-
-# HTTP latency buffer configuration
-httpLatencyBuffer:
-  maxSamples: 1000

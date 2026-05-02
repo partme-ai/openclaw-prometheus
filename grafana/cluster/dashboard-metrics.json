@@ -1,509 +1,150 @@
 {
-  "dashboard": {
-    "title": "OpenClaw - Detailed Metrics",
-    "description": "Detailed metrics for OpenClaw Gateway with multi-instance support",
-    "tags": ["openclaw", "metrics", "cluster", "production"],
-    "timezone": "browser",
-    "refresh": "10s",
-    "templating": {
-      "list": [
-        "current_interval",
-        "openclaw_instance",
-        "openclaw_queue",
-        "openclaw_node",
-        "datasource",
-        "scrape_interval"
-      ]
-    },
-    "time": {
-      "from": "now-1h",
-      "to": "now"
-    },
-    "timepicker": {
-      "refresh_intervals": [
-        "5s",
-        "10s",
-        "30s",
-        "1m",
-        "5m",
-        "15m",
-        "30m",
-        "1h",
-        "6h",
-        "12h",
-        "1d"
-      ]
-    },
-    "variables": {
-      "datasource": {
-        "type": "datasource",
-        "name": "DS_PROMETHEUS"
-      },
-      "openclaw_instance": {
-        "type": "query",
-        "datasource": "DS_PROMETHEUS",
-        "refresh": 2,
-        "query": "label_values(openclaw_up, instance)",
-        "includeAll": true,
-        "allValue": null,
-        "multi": false,
-        "options": []
-      },
-      "openclaw_queue": {
-        "type": "query",
-        "datasource": "DS_PROMETHEUS",
-        "refresh": 2,
-        "query": "label_values(openclaw_channel, queue)",
-        "includeAll": true,
-        "allValue": "All",
-        "multi": false,
-        "options": []
-      },
-      "openclaw_node": {
-        "type": "query",
-        "datasource": "DS_PROMETHEUS",
-        "refresh": 2,
-        "query": "label_values(openclaw_node, node)",
-        "includeAll": true,
-        "allValue": "All",
-        "multi": false,
-        "options": []
-      }
-    },
-    "panels": [
-      {
-        "title": "Agent Performance - All Instances",
-        "gridPos": {
-          "h": 0,
-          "w": 0,
-          "x": 0,
-          "y": 0
-        },
-        "repeat": "openclaw_instance",
-        "repeatDirection": "h",
-        "maxPerRow": 3,
-        "repeatIteration": 2,
-        "collapsed": false,
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, rate(openclaw_agent_run_duration_seconds_bucket[5m]))",
-            "legendFormat": "{{instance}} P95",
-            "refId": "A"
-          },
-          {
-            "expr": "histogram_quantile(0.99, rate(openclaw_agent_run_duration_seconds_bucket[5m]))",
-            "legendFormat": "{{instance}} P99",
-            "refId": "B"
-          },
-          {
-            "expr": "avg(openclaw_sli_agent_error_ratio{instance=~\"$openclaw_instance\"})",
-            "legendFormat": "{{instance}} Error Rate",
-            "format": "percentunit(0, 100)",
-            "refId": "C"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "custom": {
-              "lineWidth": 2,
-              "fillOpacity": 0.1
-            }
-          }
-        },
-        "options": {
-          "legend": {
-            "displayMode": "table",
-            "placement": "bottom"
-          },
-          "tooltip": {
-            "mode": "multi"
-          },
-          "displayMode": "gradient"
-        },
-        "type": "timeseries"
-      },
-      {
-        "title": "Tool Performance - All Instances",
-        "gridPos": {
-          "h": 3,
-          "w": 0,
-          "x": 12,
-          "y": 0
-        },
-        "repeat": "openclaw_instance",
-        "repeatDirection": "h",
-        "maxPerRow": 3,
-        "repeatIteration": 2,
-        "collapsed": false,
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, rate(openclaw_tool_call_duration_seconds_bucket[5m]))",
-            "legendFormat": "{{instance}} P95",
-            "refId": "A"
-          },
-          {
-            "expr": "histogram_quantile(0.99, rate(openclaw_tool_call_duration_seconds_bucket[5m]))",
-            "legendFormat": "{{instance}} P99",
-            "refId": "B"
-          },
-          {
-            "expr": "avg(openclaw_sli_tool_error_ratio{instance=~\"$openclaw_instance\"})",
-            "legendFormat": "{{instance}} Error Rate",
-            "format": "percentunit(0, 100)",
-            "refId": "C"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "custom": {
-              "lineWidth": 2,
-              "fillOpacity": 0.1
-            }
-          }
-        },
-        "options": {
-          "legend": {
-            "displayMode": "table",
-            "placement": "bottom"
-          },
-          "tooltip": {
-            "mode": "multi"
-          },
-          "displayMode": "gradient"
-        },
-        "type": "timeseries"
-      },
-      {
-        "title": "Message Throughput - All Instances",
-        "gridPos": {
-          "h": 6,
-          "w": 0,
-          "x": 0,
-          "y": 6
-        },
-        "repeat": "openclaw_instance",
-        "repeatDirection": "h",
-        "maxPerRow": 3,
-        "repeatIteration": 2,
-        "collapsed": false,
-        "targets": [
-          {
-            "expr": "rate(openclaw_session_messages_sent_total{result=\"ok\", instance=~\"$openclaw_instance\"}[5m])",
-            "legendFormat": "{{instance}} Sent/s",
-            "refId": "A"
-          },
-          {
-            "expr": "rate(openclaw_session_messages_received_total{instance=~\"$openclaw_instance\"}[5m])",
-            "legendFormat": "{{instance}} Received/s",
-            "refId": "B"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "custom": {
-              "lineWidth": 2,
-              "fillOpacity": 0.1
-            }
-          }
-        },
-        "options": {
-          "legend": {
-            "displayMode": "table",
-            "placement": "bottom"
-          },
-          "tooltip": {
-            "mode": "multi"
-          },
-          "displayMode": "gradient"
-        },
-        "type": "graph"
-      },
-      {
-        "title": "Channel Health - By Queue",
-        "gridPos": {
-          "h": 9,
-          "w": 0,
-          "x": 0,
-          "y": 9
-        },
-        "repeat": "openclaw_queue",
-        "repeatDirection": "h",
-        "maxPerRow": 3,
-        "collapsed": false,
-        "targets": [
-          {
-            "expr": "sum(openclaw_channel_linked_total{queue=~\"$openclaw_queue\", instance=~\"$openclaw_instance\"})",
-            "refId": "A"
-          },
-          {
-            "expr": "sum(openclaw_channel_total{queue=~\"$openclaw_queue\", instance=~\"$openclaw_instance\"}) - sum(openclaw_channel_linked_total{queue=~\"$openclaw_queue\", instance=~\"$openclaw_instance\"})",
-            "refId": "B"
-          },
-          {
-            "expr": "avg(openclaw_sli_channel_health_ratio{queue=~\"$openclaw_queue\", instance=~\"$openclaw_instance\"})",
-            "legendFormat": "{{queue}} Health",
-            "format": "percentunit(0, 100)",
-            "refId": "C"
-          }
-        ],
-        "options": {
-          "legend": {
-            "displayMode": "table",
-            "placement": "bottom"
-          },
-          "tooltip": {
-            "mode": "multi"
-          },
-          "displayMode": "gradient"
-        },
-        "type": "timeseries"
-      },
-      {
-        "title": "System Status - By Node",
-        "gridPos": {
-          "h": 12,
-          "w": 0,
-          "x": 12,
-          "y": 0
-        },
-        "repeat": "openclaw_node",
-        "repeatDirection": "h",
-        "maxPerRow": 3,
-        "collapsed": false,
-        "targets": [
-          {
-            "expr": "openclaw_up{node=~\"$openclaw_node\", instance=~\"$openclaw_instance\"}",
-            "legendFormat": "{{node}} Up",
-            "refId": "A"
-          },
-          {
-            "expr": "openclaw_ready{node=~\"$openclaw_node\", instance=~\"$openclaw_instance\"}",
-            "legendFormat": "{{node}} Ready",
-            "refId": "B"
-          },
-          {
-            "expr": "openclaw_plugin_uptime_seconds{node=~\"$openclaw_node\", instance=~\"$openclaw_instance\"}",
-            "legendFormat": "{{node}} Uptime",
-            "format": "durations",
-            "refId": "C"
-          }
-        ],
-        "options": {
-          "legend": {
-            "displayMode": "table",
-            "placement": "bottom"
-          },
-          "tooltip": {
-            "mode": "multi"
-          },
-          "displayMode": "gradient"
-        },
-        "type": "timeseries"
-      },
-      {
-        "title": "Collector Status - By Instance",
-        "gridPos": {
-          "h": 12,
-          "w": 12,
-          "x": 12,
-          "y": 0
-        },
-        "repeat": "openclaw_instance",
-        "repeatDirection": "h",
-        "maxPerRow": 1,
-        "repeatIteration": 2,
-        "collapsed": false,
-        "transform": "table",
-        "targets": [
-          {
-            "expr": "avg(openclaw_metrics_last_scrape_duration_seconds{instance=~\"$openclaw_instance\"})",
-            "legendFormat": "{{instance}} Scrape",
-            "format": "s",
-            "refId": "A"
-          },
-          {
-            "expr": "avg(openclaw_metrics_collector_success{instance=~\"$openclaw_instance\"})",
-            "legendFormat": "{{instance}} Success",
-            "format": "percentunit(0, 100)",
-            "refId": "B"
-          }
-        ],
-        "options": {
-          "legend": {
-            "displayMode": "table",
-            "placement": "bottom"
-          },
-          "tooltip": {
-            "mode": "multi"
-          },
-          "displayMode": "table"
-        },
-        "type": "table"
-      },
-      {
-        "title": "HTTP Request Latency - All Instances",
-        "gridPos": {
-          "h": 15,
-          "w": 0,
-          "x": 0,
-          "y": 12
-        },
-        "repeat": "openclaw_instance",
-        "repeatDirection": "h",
-        "maxPerRow": 3,
-        "repeatIteration": 2,
-        "collapsed": false,
-        "targets": [
-          {
-            "expr": "openclaw_sli_http_request_p95_seconds{instance=~\"$openclaw_instance\"}",
-            "legendFormat": "{{instance}} P95",
-            "format": "s",
-            "refId": "A"
-          },
-          {
-            "expr": "openclaw_sli_http_request_p99_seconds{instance=~\"$openclaw_instance\"}",
-            "legendFormat": "{{instance}} P99",
-            "format": "s",
-            "refId": "B"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "custom": {
-              "lineWidth": 2,
-              "fillOpacity": 0.1
-            }
-          }
-        },
-        "options": {
-          "legend": {
-            "displayMode": "table",
-            "placement": "bottom"
-          },
-          "tooltip": {
-            "mode": "multi"
-          },
-          "displayMode": "gradient"
-        },
-        "type": "timeseries"
-      },
-      {
-        "title": "Metric Series - By Instance",
-        "gridPos": {
-          "h": 15,
-          "w": 12,
-          "x": 12,
-          "y": 12
-        },
-        "repeat": "openclaw_instance",
-        "repeatDirection": "h",
-        "maxPerRow": 3,
-        "repeatIteration": 2,
-        "collapsed": false,
-        "targets": [
-          {
-            "expr": "sum(openclaw_metrics_series_total{instance=~\"$openclaw_instance\"})",
-            "legendFormat": "{{instance}} Series",
-            "refId": "A"
-          }
-        ],
-        "options": {
-          "legend": {
-            "displayMode": "table",
-            "placement": "bottom"
-          },
-          "tooltip": {
-            "mode": "multi"
-          },
-          "displayMode": "gradient"
-        },
-        "type": "graph"
-      },
-      {
-        "title": "Agent Run Distribution - By Instance",
-        "gridPos": {
-          "h": 18,
-          "w": 0,
-          "x": 0,
-          "y": 18
-        },
-        "repeat": "openclaw_instance",
-        "repeatDirection": "h",
-        "maxPerRow": 1,
-        "repeatIteration": 2,
-        "collapsed": true,
-        "targets": [
-          {
-            "expr": "rate(openclaw_agent_runs_started_total{instance=~\"$openclaw_instance\"}[5m])",
-            "legendFormat": "{{instance}} Started/s",
-            "refId": "A"
-          },
-          {
-            "expr": "rate(openclaw_agent_runs_failed_total{instance=~\"$openclaw_instance\"}[5m])",
-            "legendFormat": "{{instance}} Failed/s",
-            "refId": "B"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "custom": {
-              "lineWidth": 2,
-              "fillOpacity": 0.1
-            }
-          }
-        },
-        "options": {
-          "legend": {
-            "displayMode": "table",
-            "placement": "bottom"
-          },
-          "tooltip": {
-            "mode": "multi"
-          },
-          "displayMode": "gradient"
-        },
-        "type": "timeseries"
-      },
-      {
-        "title": "Channel Failures - By Queue",
-        "gridPos": {
-          "h": 18,
-          "w": 12,
-          "x": 12,
-          "y": 18
-        },
-        "repeat": "openclaw_queue",
-        "repeatDirection": "h",
-        "maxPerRow": 1,
-        "repeatIteration": 2,
-        "collapsed": true,
-        "targets": [
-          {
-            "expr": "rate(openclaw_channel_failures_total{queue=~\"$openclaw_queue\", instance=~\"$openclaw_instance\"}[5m])",
-            "legendFormat": "{{queue}} Failures/s",
-            "refId": "A"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "custom": {
-              "lineWidth": 2,
-              "fillOpacity": 0.1
-            }
-          }
-        },
-        "options": {
-          "legend": {
-            "displayMode": "table",
-            "placement": "bottom"
-          },
-          "tooltip": {
-            "mode": "multi"
-          },
-          "displayMode": "gradient"
-        },
-        "type": "graph"
-      }
+  "__inputs": [
+    { "name": "DS_PROMETHEUS", "label": "prometheus", "description": "", "type": "datasource", "pluginId": "prometheus", "pluginName": "Prometheus" }
+  ],
+  "__elements": {},
+  "__requires": [
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "11.0.0" },
+    { "type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0" },
+    { "type": "panel", "id": "stat", "name": "Stat", "version": "" },
+    { "type": "panel", "id": "table", "name": "Table", "version": "" },
+    { "type": "panel", "id": "timeseries", "name": "Time series", "version": "" }
+  ],
+  "annotations": {
+    "list": [
+      { "builtIn": 1, "datasource": { "type": "datasource", "uid": "grafana" }, "enable": true, "hide": true, "iconColor": "rgba(0, 211, 255, 1)", "name": "Annotations & Alerts", "target": { "limit": 100, "matchAny": false, "tags": [], "type": "dashboard" }, "type": "dashboard" }
     ]
-  }
+  },
+  "description": "Detailed OpenClaw Gateway metrics: agent performance breakdown by ID, tool call latency by tool, LLM token throughput by model, channel message rates, and collector health table. Designed after RabbitMQ-Overview enterprise patterns.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }, "id": 100, "panels": [], "title": "AGENT PERFORMANCE", "type": "row" },
+    { "id": 1, "type": "timeseries", "title": "Agent Duration (P50/P95/P99) / s", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "description": "Agent run duration percentiles. P99 above 10min is critical.",
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] }, "unit": "s" }, "overrides": [] },
+      "options": { "legend": { "calcs": ["max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(openclaw_agent_run_duration_seconds_bucket{instance=~\"$instance\"}[5m])) by (le))", "legendFormat": "P50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum(rate(openclaw_agent_run_duration_seconds_bucket{instance=~\"$instance\"}[5m])) by (le))", "legendFormat": "P95", "refId": "B" },
+        { "expr": "histogram_quantile(0.99, sum(rate(openclaw_agent_run_duration_seconds_bucket{instance=~\"$instance\"}[5m])) by (le))", "legendFormat": "P99", "refId": "C" }
+      ] },
+    { "id": 2, "type": "timeseries", "title": "Agent Runs / s (by Agent ID)", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "description": "Agent run rate broken down by agent_id. Useful for identifying which agents are most active.",
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] }, "unit": "reqps" }, "overrides": [] },
+      "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "sum(rate(openclaw_agent_runs_started_total{instance=~\"$instance\"}[5m])) by (agent_id)", "legendFormat": "{{agent_id}}", "refId": "A" }
+      ] },
+    { "id": 3, "type": "table", "title": "Agent Runs by ID & Result", "gridPos": { "h": 8, "w": 24, "x": 0, "y": 9 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "description": "Cumulative agent runs grouped by agent_id and result (ok/error).",
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] } }, "overrides": [{"matcher":{"id":"byName","options":"result"},"properties":[{"id":"mappings","value":[{"options":{"ok":{"text":"OK","color":"green"},"error":{"text":"ERROR","color":"red"}},"type":"value"}]}]}] },
+      "options": { "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false }, "showHeader": true },
+      "targets": [
+        { "expr": "sum(openclaw_agent_runs_total{instance=~\"$instance\"}) by (agent_id, result)", "format": "table", "instant": true, "refId": "A" }
+      ],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "instance": true, "job": true, "__name__": true }, "renameByName": { "agent_id": "Agent ID", "result": "Result" } } }
+      ] },
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 17 }, "id": 101, "panels": [], "title": "TOOL PERFORMANCE", "type": "row" },
+    { "id": 10, "type": "timeseries", "title": "Tool Duration P95 / s (by Tool)", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "description": "P95 tool call duration broken down by tool name.",
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] }, "unit": "s" }, "overrides": [] },
+      "options": { "legend": { "calcs": ["max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(openclaw_tool_call_duration_seconds_bucket{instance=~\"$instance\"}[5m])) by (le, tool))", "legendFormat": "{{tool}}", "refId": "A" }
+      ] },
+    { "id": 11, "type": "table", "title": "Tool Calls by Tool", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "description": "Tool call rates broken down by tool name.",
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] } }, "overrides": [{"matcher":{"id":"byName","options":"Calls / s"},"properties":[{"id":"unit","value":"reqps"},{"id":"decimals","value":3}]},{"matcher":{"id":"byName","options":"Failures / s"},"properties":[{"id":"unit","value":"reqps"},{"id":"decimals","value":3}]}] },
+      "options": { "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false }, "showHeader": true },
+      "targets": [
+        { "expr": "sum(rate(openclaw_tool_calls_total{instance=~\"$instance\"}[5m])) by (tool)", "format": "table", "instant": true, "refId": "A" },
+        { "expr": "sum(rate(openclaw_tool_call_failures_total{instance=~\"$instance\"}[5m])) by (tool)", "format": "table", "instant": true, "refId": "B" }
+      ],
+      "transformations": [
+        { "id": "merge", "options": {} },
+        { "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "tool": "Tool", "Value #A": "Calls / s", "Value #B": "Failures / s" } } }
+      ] },
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 26 }, "id": 102, "panels": [], "title": "LLM TOKEN USAGE", "type": "row" },
+    { "id": 20, "type": "timeseries", "title": "Token Throughput / s (by Model)", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 27 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "description": "Input and output token rate per second broken down by model.",
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] }, "unit": "short" }, "overrides": [] },
+      "options": { "legend": { "calcs": ["mean"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "sum(rate(openclaw_model_llm_tokens_input_total{instance=~\"$instance\"}[5m])) by (model)", "legendFormat": "{{model}} input / s", "refId": "A" },
+        { "expr": "sum(rate(openclaw_model_llm_tokens_output_total{instance=~\"$instance\"}[5m])) by (model)", "legendFormat": "{{model}} output / s", "refId": "B" }
+      ] },
+    { "id": 21, "type": "timeseries", "title": "Estimated Cost / USD (by Model)", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 27 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "description": "Estimated cumulative cost in USD broken down by model.",
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] }, "unit": "currencyUSD", "decimals": 2 }, "overrides": [] },
+      "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "openclaw_usage_model_cost_usd_total{instance=~\"$instance\"}", "legendFormat": "{{model}}", "refId": "A" }
+      ] },
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 35 }, "id": 103, "panels": [], "title": "MESSAGES & CHANNELS", "type": "row" },
+    { "id": 30, "type": "timeseries", "title": "Message Rate / s (by Channel)", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 36 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "description": "Sent and received message rate per second, broken down by channel.",
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] }, "unit": "reqps" }, "overrides": [] },
+      "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "sum(rate(openclaw_session_messages_sent_total{result=\"ok\",instance=~\"$instance\"}[5m])) by (channel)", "legendFormat": "{{channel}} Sent OK", "refId": "A" },
+        { "expr": "sum(rate(openclaw_session_messages_sent_total{result=\"error\",instance=~\"$instance\"}[5m])) by (channel)", "legendFormat": "{{channel}} Sent Error", "refId": "B" }
+      ] },
+    { "id": 31, "type": "timeseries", "title": "Sessions", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 36 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "description": "Total sessions and recently active (30m) sessions.",
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] }, "unit": "short" }, "overrides": [] },
+      "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "openclaw_session_total{instance=~\"$instance\"}", "legendFormat": "Total Sessions", "refId": "A" },
+        { "expr": "openclaw_session_active_recent{instance=~\"$instance\"}", "legendFormat": "Active (30m)", "refId": "B" }
+      ] },
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 44 }, "id": 104, "panels": [], "title": "COLLECTOR STATUS", "type": "row" },
+    { "id": 40, "type": "table", "title": "Collector Health", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 45 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "description": "Per-collector success status. 1 = OK, 0 = FAIL.",
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] } }, "overrides": [{"matcher":{"id":"byName","options":"Value"},"properties":[{"id":"mappings","value":[{"options":{"0":{"text":"FAIL","color":"red"},"1":{"text":"OK","color":"green"}},"type":"value"}]}]}] },
+      "options": { "footer": { "countRows": false, "fields": "", "reducer": ["sum"], "show": false }, "showHeader": true },
+      "targets": [
+        { "expr": "openclaw_metrics_collector_success{instance=~\"$instance\"}", "format": "table", "instant": true, "refId": "A" }
+      ],
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "instance": true, "job": true, "__name__": true }, "renameByName": { "collector": "Collector" } } }
+      ] },
+    { "id": 41, "type": "timeseries", "title": "Plugin Uptime / s", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 45 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "description": "Plugin uptime in seconds per instance.",
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] }, "unit": "s" }, "overrides": [] },
+      "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "openclaw_plugin_uptime_seconds{instance=~\"$instance\"}", "legendFormat": "{{instance}}", "refId": "A" }
+      ] }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 41,
+  "tags": ["openclaw", "metrics", "detailed", "production"],
+  "templating": {
+    "list": [
+      { "current": { "text": "Prometheus", "value": "Prometheus" }, "hide": 0, "includeAll": false, "label": "Data source", "multi": false, "name": "DS_PROMETHEUS", "options": [], "query": "prometheus", "refresh": 1, "regex": "", "type": "datasource" },
+      { "current": { "selected": true, "text": "All", "value": "$__all" }, "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "definition": "label_values(openclaw_up, instance)", "hide": 0, "includeAll": true, "label": "Instance", "multi": true, "name": "instance", "options": [], "query": { "qryType": 1, "query": "label_values(openclaw_up, instance)", "refId": "PrometheusVariableQueryEditor-VariableQuery" }, "refresh": 2, "regex": "", "skipUrlSync": false, "sort": 1, "type": "query" }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": { "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h"] },
+  "timezone": "browser",
+  "title": "OpenClaw - Detailed Metrics",
+  "uid": "openclaw-metrics",
+  "version": 1
 }
