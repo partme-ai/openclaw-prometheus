@@ -1,13 +1,6 @@
 {
   "__inputs": [
-    {
-      "name": "DS_PROMETHEUS",
-      "label": "prometheus",
-      "description": "",
-      "type": "datasource",
-      "pluginId": "prometheus",
-      "pluginName": "Prometheus"
-    }
+    { "name": "DS_PROMETHEUS", "label": "prometheus", "description": "", "type": "datasource", "pluginId": "prometheus", "pluginName": "Prometheus" }
   ],
   "__elements": {},
   "__requires": [
@@ -18,19 +11,10 @@
   ],
   "annotations": {
     "list": [
-      {
-        "builtIn": 1,
-        "datasource": { "type": "datasource", "uid": "grafana" },
-        "enable": true,
-        "hide": true,
-        "iconColor": "rgba(0, 211, 255, 1)",
-        "name": "Annotations & Alerts",
-        "target": { "limit": 100, "matchAny": false, "tags": [], "type": "dashboard" },
-        "type": "dashboard"
-      }
+      { "builtIn": 1, "datasource": { "type": "datasource", "uid": "grafana" }, "enable": true, "hide": true, "iconColor": "rgba(0, 211, 255, 1)", "name": "Annotations & Alerts", "target": { "limit": 100, "matchAny": false, "tags": [], "type": "dashboard" }, "type": "dashboard" }
     ]
   },
-  "description": "OpenClaw Gateway production overview — instant KPI visibility with stats row followed by partitioned timeseries for message flow, agent activity, tool calls, channel health, and system resources. Designed after RabbitMQ-Overview enterprise patterns.",
+  "description": "OpenClaw Gateway production overview — instant KPI visibility with stats row followed by partitioned timeseries. Queries auto-adapt to deployed Gateway metrics (RPC-based collectors work immediately; hook-based counters appear after Gateway activity).",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -39,203 +23,125 @@
   "panels": [
     { "id": 1, "type": "stat", "title": "Instances", "gridPos": { "h": 5, "w": 3, "x": 0, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "description": "Number of OpenClaw Gateway instances reporting.",
-      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [{"color": "red"},{"color": "green","value":1}] }, "noValue": "0" }, "overrides": [] },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [{"color":"red"},{"color":"green","value":1}] }, "noValue": "0" }, "overrides": [] },
       "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
-      "targets": [{ "expr": "count(openclaw_up)", "refId": "A" }] },
+      "targets": [{ "expr": "count(openclaw_up{instance=~\"$instance\"})", "refId": "A" }] },
     { "id": 2, "type": "stat", "title": "Plugin Up", "gridPos": { "h": 5, "w": 3, "x": 3, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "description": "Whether the OpenClaw Prometheus plugin is loaded and healthy.",
       "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [{"options":{"0":{"text":"DOWN","color":"red"},"1":{"text":"UP","color":"green"}},"type":"value"}], "thresholds": { "mode": "absolute", "steps": [{"color":"red"},{"color":"green","value":1}] }, "noValue": "-" }, "overrides": [] },
       "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value" },
       "targets": [{ "expr": "openclaw_up{instance=~\"$instance\"}", "refId": "A" }] },
     { "id": 3, "type": "stat", "title": "Plugin Ready", "gridPos": { "h": 5, "w": 3, "x": 6, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "description": "Whether the plugin runtime is fully initialized and ready to serve metrics.",
       "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [{"options":{"0":{"text":"NOT READY","color":"red"},"1":{"text":"READY","color":"green"}},"type":"value"}], "thresholds": { "mode": "absolute", "steps": [{"color":"red"},{"color":"green","value":1}] }, "noValue": "-" }, "overrides": [] },
       "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value" },
       "targets": [{ "expr": "openclaw_ready{instance=~\"$instance\"}", "refId": "A" }] },
     { "id": 4, "type": "stat", "title": "Gateway Up", "gridPos": { "h": 5, "w": 3, "x": 9, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "description": "Gateway health status as reported by the health RPC.",
       "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [{"options":{"0":{"text":"DOWN","color":"red"},"1":{"text":"UP","color":"green"}},"type":"value"}], "thresholds": { "mode": "absolute", "steps": [{"color":"red"},{"color":"green","value":1}] }, "noValue": "-" }, "overrides": [] },
       "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value" },
       "targets": [{ "expr": "openclaw_gateway_up{instance=~\"$instance\"}", "refId": "A" }] },
     { "id": 5, "type": "stat", "title": "Snapshot Age", "gridPos": { "h": 5, "w": 3, "x": 12, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "description": "Age of the most recent runtime snapshot. High values indicate the plugin is not refreshing metadata.",
       "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"orange","value":30},{"color":"red","value":60}] }, "unit": "s", "noValue": "-" }, "overrides": [] },
       "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value" },
-      "targets": [{ "expr": "avg(openclaw_runtime_snapshot_age_seconds{instance=~\"$instance\"})", "refId": "A" }] },
+      "targets": [{ "expr": "openclaw_runtime_snapshot_age_seconds{instance=~\"$instance\"}", "refId": "A" }] },
     { "id": 6, "type": "stat", "title": "Sessions", "gridPos": { "h": 5, "w": 3, "x": 15, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "description": "Total sessions currently tracked by the Gateway.",
       "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [{"color":"green"}] }, "unit": "short", "noValue": "0" }, "overrides": [] },
       "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value" },
-      "targets": [{ "expr": "sum(openclaw_session_total{instance=~\"$instance\"})", "refId": "A" }] },
+      "targets": [{ "expr": "openclaw_session_total{instance=~\"$instance\"}", "refId": "A" }] },
     { "id": 7, "type": "stat", "title": "Msg Success", "gridPos": { "h": 5, "w": 3, "x": 18, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "description": "Message delivery success ratio (0–1). SLO target: ≥ 0.999.",
       "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [{"color":"red"},{"color":"orange","value":0.95},{"color":"green","value":0.999}] }, "unit": "percentunit", "noValue": "-", "decimals": 3 }, "overrides": [] },
       "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value" },
       "targets": [{ "expr": "openclaw_sli_message_success_ratio{instance=~\"$instance\"}", "refId": "A" }] },
     { "id": 8, "type": "stat", "title": "Channel Health", "gridPos": { "h": 5, "w": 3, "x": 21, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "description": "Channel health ratio (linked / total). Values below 0.95 mean some channels are disconnected.",
       "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [{"color":"red"},{"color":"orange","value":0.95},{"color":"green","value":0.99}] }, "unit": "percentunit", "noValue": "-", "decimals": 3 }, "overrides": [] },
       "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "value" },
       "targets": [{ "expr": "openclaw_sli_channel_health_ratio{instance=~\"$instance\"}", "refId": "A" }] },
-    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 }, "id": 101, "panels": [], "title": "MESSAGE FLOW", "type": "row" },
-    { "id": 10, "type": "timeseries", "title": "Messages / s", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 }, "id": 101, "panels": [], "title": "CHANNELS", "type": "row" },
+    { "id": 10, "type": "timeseries", "title": "Channels (Total vs Linked)", "gridPos": { "h": 8, "w": 8, "x": 0, "y": 6 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "description": "Messages sent and received per second across all channels.",
-      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] }, "unit": "reqps" }, "overrides": [] },
-      "options": { "legend": { "calcs": ["mean", "max", "lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
-      "targets": [
-        { "expr": "sum(rate(openclaw_session_messages_sent_total{result=\"ok\",instance=~\"$instance\"}[5m]))", "legendFormat": "Sent OK / s", "refId": "A" },
-        { "expr": "sum(rate(openclaw_session_messages_received_total{instance=~\"$instance\"}[5m]))", "legendFormat": "Received / s", "refId": "B" },
-        { "expr": "sum(rate(openclaw_session_messages_sent_total{result=\"error\",instance=~\"$instance\"}[5m]))", "legendFormat": "Sent Error / s", "refId": "C" }
-      ] },
-    { "id": 11, "type": "timeseries", "title": "Message Success Ratio", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "description": "Message delivery success ratio over time. Drops indicate delivery failures.",
-      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "max": 1, "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] }, "unit": "percentunit", "decimals": 4 }, "overrides": [] },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "unit": "short" }, "overrides": [] },
       "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
       "targets": [
-        { "expr": "openclaw_sli_message_success_ratio{instance=~\"$instance\"}", "legendFormat": "Success Ratio", "refId": "A" }
+        { "expr": "openclaw_channel_total{instance=~\"$instance\"}", "legendFormat": "Total", "refId": "A" },
+        { "expr": "openclaw_channel_linked_total{instance=~\"$instance\"}", "legendFormat": "Linked", "refId": "B" }
       ] },
-    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 }, "id": 102, "panels": [], "title": "AGENT ACTIVITY", "type": "row" },
-    { "id": 20, "type": "timeseries", "title": "Agent Runs / s", "gridPos": { "h": 8, "w": 8, "x": 0, "y": 15 },
+    { "id": 11, "type": "timeseries", "title": "Channel Health Ratio", "gridPos": { "h": 8, "w": 8, "x": 8, "y": 6 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "description": "Agent runs started and failed per second. Spikes in failures may indicate model or tool issues.",
-      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] }, "unit": "reqps" }, "overrides": [] },
-      "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "max": 1, "unit": "percentunit", "decimals": 3 }, "overrides": [] },
+      "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [{ "expr": "openclaw_sli_channel_health_ratio{instance=~\"$instance\"}", "legendFormat": "Health", "refId": "A" }] },
+    { "id": 12, "type": "timeseries", "title": "Sessions (Total + Active 30m)", "gridPos": { "h": 8, "w": 8, "x": 16, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "unit": "short" }, "overrides": [] },
+      "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
       "targets": [
-        { "expr": "sum(rate(openclaw_agent_runs_started_total{instance=~\"$instance\"}[5m]))", "legendFormat": "Started / s", "refId": "A" },
-        { "expr": "sum(rate(openclaw_agent_runs_failed_total{instance=~\"$instance\"}[5m]))", "legendFormat": "Failed / s", "refId": "B" }
+        { "expr": "openclaw_session_total{instance=~\"$instance\"}", "legendFormat": "Total", "refId": "A" },
+        { "expr": "openclaw_session_active_recent{instance=~\"$instance\"}", "legendFormat": "Active 30m", "refId": "B" }
       ] },
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 }, "id": 102, "panels": [], "title": "AGENT & TOOL", "type": "row" },
+    { "id": 20, "type": "timeseries", "title": "Agent Runs Rate / s", "gridPos": { "h": 8, "w": 8, "x": 0, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "description": "Agent run rate. No data until agent activity occurs.",
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "unit": "reqps" }, "overrides": [] },
+      "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [{ "expr": "sum(rate(openclaw_agent_runs_started_total{instance=~\"$instance\"}[5m]))", "legendFormat": "Started / s", "refId": "A" }] },
     { "id": 21, "type": "timeseries", "title": "Agent Error Ratio", "gridPos": { "h": 8, "w": 8, "x": 8, "y": 15 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "description": "Agent execution error ratio. Sustained values above 0.1 require investigation.",
-      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "max": 1, "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] }, "unit": "percentunit", "decimals": 3 }, "overrides": [] },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "max": 1, "unit": "percentunit", "decimals": 3 }, "overrides": [] },
       "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
-      "targets": [
-        { "expr": "openclaw_sli_agent_error_ratio{instance=~\"$instance\"}", "legendFormat": "Error Ratio", "refId": "A" }
-      ] },
-    { "id": 22, "type": "timeseries", "title": "Agent Duration P95 / s", "gridPos": { "h": 8, "w": 8, "x": 16, "y": 15 },
+      "targets": [{ "expr": "openclaw_sli_agent_error_ratio{instance=~\"$instance\"}", "legendFormat": "Error", "refId": "A" }] },
+    { "id": 22, "type": "timeseries", "title": "Tool Calls Rate / s", "gridPos": { "h": 8, "w": 8, "x": 16, "y": 15 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "description": "P95 agent run duration in seconds. High values indicate slow agents.",
-      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] }, "unit": "s" }, "overrides": [] },
-      "options": { "legend": { "calcs": ["max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
-      "targets": [
-        { "expr": "histogram_quantile(0.95, sum(rate(openclaw_agent_run_duration_seconds_bucket{instance=~\"$instance\"}[5m])) by (le))", "legendFormat": "P95", "refId": "A" }
-      ] },
-    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 }, "id": 103, "panels": [], "title": "TOOL ACTIVITY", "type": "row" },
-    { "id": 30, "type": "timeseries", "title": "Tool Calls / s", "gridPos": { "h": 8, "w": 8, "x": 0, "y": 24 },
+      "description": "Tool call rate. No data until tool activity occurs.",
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "unit": "reqps" }, "overrides": [] },
+      "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [{ "expr": "sum(rate(openclaw_tool_calls_total{instance=~\"$instance\"}[5m]))", "legendFormat": "Calls / s", "refId": "A" }] },
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 }, "id": 103, "panels": [], "title": "USAGE & COST", "type": "row" },
+    { "id": 30, "type": "timeseries", "title": "Token Throughput / s (by Model)", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "description": "Tool calls and failures per second. Increased failure rate may indicate tool API issues.",
-      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] }, "unit": "reqps" }, "overrides": [] },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "unit": "short" }, "overrides": [] },
+      "options": { "legend": { "calcs": ["mean"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "expr": "sum(rate(openclaw_usage_model_tokens_input_total{instance=~\"$instance\"}[5m])) by (model)", "legendFormat": "{{model}} in", "refId": "A" },
+        { "expr": "sum(rate(openclaw_usage_model_tokens_output_total{instance=~\"$instance\"}[5m])) by (model)", "legendFormat": "{{model}} out", "refId": "B" }
+      ] },
+    { "id": 31, "type": "timeseries", "title": "Estimated Cost / USD (by Model)", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "unit": "currencyUSD", "decimals": 2 }, "overrides": [] },
+      "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [{ "expr": "openclaw_usage_model_cost_usd_total{instance=~\"$instance\"}", "legendFormat": "{{model}}", "refId": "A" }] },
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 32 }, "id": 104, "panels": [], "title": "SYSTEM", "type": "row" },
+    { "id": 40, "type": "timeseries", "title": "Node.js Memory", "gridPos": { "h": 8, "w": 8, "x": 0, "y": 33 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "unit": "decbytes" }, "overrides": [] },
       "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
       "targets": [
-        { "expr": "sum(rate(openclaw_tool_calls_total{instance=~\"$instance\"}[5m]))", "legendFormat": "Calls / s", "refId": "A" },
-        { "expr": "sum(rate(openclaw_tool_call_failures_total{instance=~\"$instance\"}[5m]))", "legendFormat": "Failures / s", "refId": "B" }
+        { "expr": "openclaw_nodejs_heap_used_bytes{instance=~\"$instance\"}", "legendFormat": "Heap", "refId": "A" },
+        { "expr": "openclaw_nodejs_rss_bytes{instance=~\"$instance\"}", "legendFormat": "RSS", "refId": "B" }
       ] },
-    { "id": 31, "type": "timeseries", "title": "Tool Error Ratio", "gridPos": { "h": 8, "w": 8, "x": 8, "y": 24 },
+    { "id": 41, "type": "timeseries", "title": "Event Loop Lag / ms", "gridPos": { "h": 8, "w": 8, "x": 8, "y": 33 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "description": "Tool call error ratio. Sustained values above 0.1 require investigation.",
-      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "max": 1, "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] }, "unit": "percentunit", "decimals": 3 }, "overrides": [] },
-      "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
-      "targets": [
-        { "expr": "openclaw_sli_tool_error_ratio{instance=~\"$instance\"}", "legendFormat": "Error Ratio", "refId": "A" }
-      ] },
-    { "id": 32, "type": "timeseries", "title": "Tool Duration P95 / s", "gridPos": { "h": 8, "w": 8, "x": 16, "y": 24 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "description": "P95 tool call duration in seconds.",
-      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] }, "unit": "s" }, "overrides": [] },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "unit": "ms" }, "overrides": [] },
       "options": { "legend": { "calcs": ["max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
-      "targets": [
-        { "expr": "histogram_quantile(0.95, sum(rate(openclaw_tool_call_duration_seconds_bucket{instance=~\"$instance\"}[5m])) by (le))", "legendFormat": "P95", "refId": "A" }
-      ] },
-    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 32 }, "id": 104, "panels": [], "title": "CHANNELS", "type": "row" },
-    { "id": 40, "type": "timeseries", "title": "Channels (Linked vs Total)", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 33 },
+      "targets": [{ "expr": "openclaw_nodejs_event_loop_lag_ms{instance=~\"$instance\"}", "legendFormat": "Lag", "refId": "A" }] },
+    { "id": 42, "type": "timeseries", "title": "Metric Cardinality", "gridPos": { "h": 8, "w": 8, "x": 16, "y": 33 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "description": "Total configured channels and how many are currently in linked state.",
-      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] }, "unit": "short" }, "overrides": [] },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "unit": "short" }, "overrides": [] },
       "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
-      "targets": [
-        { "expr": "sum(openclaw_channel_total{instance=~\"$instance\"})", "legendFormat": "Total", "refId": "A" },
-        { "expr": "sum(openclaw_channel_linked_total{instance=~\"$instance\"})", "legendFormat": "Linked", "refId": "B" }
-      ] },
-    { "id": 41, "type": "timeseries", "title": "Channel Health Ratio", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 33 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "description": "Channel health ratio. Drops below 0.95 mean channels are disconnected.",
-      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "max": 1, "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] }, "unit": "percentunit", "decimals": 3 }, "overrides": [] },
-      "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
-      "targets": [
-        { "expr": "openclaw_sli_channel_health_ratio{instance=~\"$instance\"}", "legendFormat": "Health Ratio", "refId": "A" }
-      ] },
-    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 41 }, "id": 105, "panels": [], "title": "SYSTEM", "type": "row" },
-    { "id": 50, "type": "timeseries", "title": "Node.js Memory", "gridPos": { "h": 8, "w": 8, "x": 0, "y": 42 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "description": "Node.js process heap and RSS memory usage.",
-      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] }, "unit": "decbytes" }, "overrides": [] },
-      "options": { "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
-      "targets": [
-        { "expr": "openclaw_nodejs_heap_used_bytes{instance=~\"$instance\"}", "legendFormat": "Heap {{instance}}", "refId": "A" },
-        { "expr": "openclaw_nodejs_rss_bytes{instance=~\"$instance\"}", "legendFormat": "RSS {{instance}}", "refId": "B" }
-      ] },
-    { "id": 51, "type": "timeseries", "title": "Event Loop Lag / ms", "gridPos": { "h": 8, "w": 8, "x": 8, "y": 42 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "description": "Node.js event loop lag. Sustained high values indicate CPU contention.",
-      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] }, "unit": "ms" }, "overrides": [] },
-      "options": { "legend": { "calcs": ["max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
-      "targets": [
-        { "expr": "openclaw_nodejs_event_loop_lag_ms{instance=~\"$instance\"}", "legendFormat": "{{instance}}", "refId": "A" }
-      ] },
-    { "id": 52, "type": "timeseries", "title": "Cardinality", "gridPos": { "h": 8, "w": 8, "x": 16, "y": 42 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "description": "Total metric series count. Cardinality above 100K should be investigated.",
-      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisBorderShow": false, "axisCenteredZero": false, "axisColorMode": "text", "axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "barWidthFactor": 0.6, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "hideFrom": { "legend": false, "tooltip": false, "viz": false }, "insertNulls": false, "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": { "type": "linear" }, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "off" } }, "mappings": [], "min": 0, "thresholds": { "mode": "absolute", "steps": [{"color":"green"},{"color":"red","value":80}] }, "unit": "short" }, "overrides": [] },
-      "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
-      "targets": [
-        { "expr": "openclaw_metrics_series_total{instance=~\"$instance\"}", "legendFormat": "{{instance}}", "refId": "A" }
-      ] }
+      "targets": [{ "expr": "openclaw_metrics_series_total{instance=~\"$instance\"}", "legendFormat": "Series", "refId": "A" }] }
   ],
   "refresh": "15s",
   "schemaVersion": 41,
   "tags": ["openclaw", "overview", "production"],
   "templating": {
     "list": [
-      {
-        "current": { "text": "Prometheus", "value": "Prometheus" },
-        "hide": 0,
-        "includeAll": false,
-        "label": "Data source",
-        "multi": false,
-        "name": "DS_PROMETHEUS",
-        "options": [],
-        "query": "prometheus",
-        "refresh": 1,
-        "regex": "",
-        "type": "datasource"
-      },
-      {
-        "current": { "selected": true, "text": "All", "value": "$__all" },
-        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-        "definition": "label_values(openclaw_up, instance)",
-        "hide": 0,
-        "includeAll": true,
-        "label": "Instance",
-        "multi": true,
-        "name": "instance",
-        "options": [],
-        "query": { "qryType": 1, "query": "label_values(openclaw_up, instance)", "refId": "PrometheusVariableQueryEditor-VariableQuery" },
-        "refresh": 2,
-        "regex": "",
-        "skipUrlSync": false,
-        "sort": 1,
-        "type": "query"
-      }
+      { "current": { "text": "DS_PROMETHEUS", "value": "DS_PROMETHEUS" }, "hide": 0, "includeAll": false, "label": "Data source", "multi": false, "name": "DS_PROMETHEUS", "options": [], "query": "prometheus", "refresh": 1, "regex": "", "type": "datasource" },
+      { "current": { "selected": true, "text": "All", "value": "$__all" }, "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "definition": "label_values(openclaw_up, instance)", "hide": 0, "includeAll": true, "label": "Instance", "multi": true, "name": "instance", "options": [], "query": { "qryType": 1, "query": "label_values(openclaw_up, instance)", "refId": "PrometheusVariableQueryEditor-VariableQuery" }, "refresh": 2, "regex": "", "skipUrlSync": false, "sort": 1, "type": "query" }
     ]
   },
   "time": { "from": "now-1h", "to": "now" },
@@ -243,5 +149,5 @@
   "timezone": "browser",
   "title": "OpenClaw - Overview",
   "uid": "openclaw-overview",
-  "version": 1
+  "version": 2
 }
