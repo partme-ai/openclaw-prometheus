@@ -10,7 +10,7 @@
     { "type": "panel", "id": "bargauge", "name": "Bar gauge", "version": "" }
   ],
   "annotations": { "list": [{ "builtIn": 1, "datasource": { "type": "datasource", "uid": "grafana" }, "enable": true, "hide": true, "name": "Annotations & Alerts", "type": "dashboard" }] },
-  "description": "OpenClaw 网关概览 — 100% 复刻 Control UI 概览页：网关状态、渠道会话、用量卡片（费用/Token/请求/消息/会话/技能/定时任务）、注意事项（认证过期/采集失败）、系统资源。中文面板标题。",
+  "description": "OpenClaw 网关概览 — 网关状态、渠道会话、用量卡片（费用/Token/请求/消息/会话/技能/定时任务）、注意事项（认证过期/采集失败）、系统资源。中文面板标题。",
   "editable": true, "fiscalYearStartMonth": 0, "graphTooltip": 1, "id": null, "links": [],
   "panels": [
     { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }, "id": 100, "panels": [], "title": "网关状态（对齐 Gateway Access + Snapshot）", "type": "row" },

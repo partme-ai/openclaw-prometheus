@@ -31,3 +31,5 @@ logs/
 *.tgz
 *.tmp
 tmp/
+.grafana-password
+.env.grafana

@@ -1,3 +1,4 @@
+import { onDiagnosticEvent } from "openclaw/plugin-sdk";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
 import type { MetricSample } from "./types.js";
 import { getRuntimeStore, listObservedChannelAccounts, rememberObservedChannelAccount, setSnapshotState } from "./runtime-store.js";
@@ -7,6 +8,113 @@ const PROVIDER_STATUSES = ["ok", "missing", "error"] as const;
 // ─────────── HTTP 延迟环形缓冲区（用于计算 P95/P99） ───────────
 const HTTP_LATENCY_SAMPLES: number[] = [];
 const HTTP_LATENCY_MAX_SAMPLES = 1000;
+let stopDiagnosticSubscription: (() => void) | null = null;
+
+type DiagnosticEventPayload =
+  | {
+      type: "model.usage";
+      sessionKey?: string;
+      sessionId?: string;
+      channel?: string;
+      provider?: string;
+      model?: string;
+      usage?: {
+        input?: number;
+        output?: number;
+        cacheRead?: number;
+        cacheWrite?: number;
+        promptTokens?: number;
+        total?: number;
+      };
+      lastCallUsage?: {
+        input?: number;
+        output?: number;
+        cacheRead?: number;
+        cacheWrite?: number;
+        total?: number;
+      };
+      context?: {
+        limit?: number;
+        used?: number;
+      };
+      costUsd?: number;
+      durationMs?: number;
+    }
+  | {
+      type: "webhook.received";
+      channel?: string;
+      updateType?: string;
+    }
+  | {
+      type: "webhook.processed";
+      channel?: string;
+      updateType?: string;
+      durationMs?: number;
+    }
+  | {
+      type: "webhook.error";
+      channel?: string;
+      updateType?: string;
+    }
+  | {
+      type: "message.queued";
+      channel?: string;
+      source?: string;
+      queueDepth?: number;
+    }
+  | {
+      type: "message.processed";
+      channel?: string;
+      outcome?: "completed" | "skipped" | "error";
+      durationMs?: number;
+    }
+  | {
+      type: "session.state";
+      state?: "idle" | "processing" | "waiting";
+      prevState?: "idle" | "processing" | "waiting";
+      queueDepth?: number;
+    }
+  | {
+      type: "session.stuck";
+      state?: "idle" | "processing" | "waiting";
+      ageMs: number;
+      queueDepth?: number;
+    }
+  | {
+      type: "queue.lane.enqueue";
+      lane?: string;
+      queueSize?: number;
+    }
+  | {
+      type: "queue.lane.dequeue";
+      lane?: string;
+      queueSize?: number;
+      waitMs?: number;
+    }
+  | {
+      type: "diagnostic.heartbeat";
+      active?: number;
+      waiting?: number;
+      queued?: number;
+      webhooks?: {
+        received?: number;
+        processed?: number;
+        errors?: number;
+      };
+    }
+  | {
+      type: "tool.loop";
+      toolName?: string;
+      detector?: string;
+      action?: string;
+      level?: string;
+      count?: number;
+      pairedToolName?: string;
+    }
+  | {
+      type: string;
+      [key: string]: unknown;
+    };
 
 export function registerPluginObservers(api: OpenClawPluginApi): void {
   registerLifecycleHooks(api);
@@ -14,6 +122,7 @@ export function registerPluginObservers(api: OpenClawPluginApi): void {
   registerToolHooks(api);
   registerAgentHooks(api);
   registerRuntimeEventListeners(api);
+  registerDiagnosticEventBridge();
   registerSupplementaryPluginHooks(api);
 }
 
@@ -22,7 +131,7 @@ function registerLifecycleHooks(api: OpenClawPluginApi): void {
     const { registry, cfg } = getRuntimeStore();
     registry.set("openclaw_ready", 1, {
       help: "Whether the plugin observed gateway_start and considers the exporter ready",
-      labels: { instance: cfg.instance || "default" },
+      labels: { deployment: cfg.instance || "default" },
     });
   });
 
@@ -30,7 +139,7 @@ function registerLifecycleHooks(api: OpenClawPluginApi): void {
     const { registry, cfg } = getRuntimeStore();
     registry.set("openclaw_ready", 0, {
       help: "Whether the plugin observed gateway_start and considers the exporter ready",
-      labels: { instance: cfg.instance || "default" },
+      labels: { deployment: cfg.instance || "default" },
     });
   });
 
@@ -161,11 +270,15 @@ function registerAgentHooks(api: OpenClawPluginApi): void {
     });
   });
 
-  api.on("llm_output", (event) => {
+  api.on("llm_output", (event, ctx) => {
     const { registry } = getRuntimeStore();
     const labels = {
-      provider: event.provider,
-      model: event.model,
+      provider: stringOr(event.provider, "unknown"),
+      model: stringOr(event.model, "unknown"),
+    };
+    const diagnosticLabels = {
+      channel: stringOr(ctx.channelId, "unknown"),
+      ...labels,
     };
     registry.inc("openclaw_usage_tokens_input_total", event.usage?.input ?? 0, {
       help: "Input tokens observed through llm_output hooks",
@@ -204,6 +317,51 @@ function registerAgentHooks(api: OpenClawPluginApi): void {
         help: "Total tokens observed through llm_output hooks",
         type: "counter",
         labels,
+      },
+    );
+
+    // 兼容兜底：部分网关部署下 diagnostics 总线对扩展插件不可见，
+    // 这里用 llm_output 的同源 usage 数据同步补齐 diagnostic model 指标。
+    registry.inc("openclaw_diagnostic_model_usage_total", 1, {
+      help: "Model usage events observed through OpenClaw diagnostics or llm_output fallback",
+      type: "counter",
+      labels: diagnosticLabels,
+    });
+    registry.inc("openclaw_diagnostic_model_tokens_total", event.usage?.input ?? 0, {
+      help: "Token totals reported by OpenClaw diagnostics or llm_output fallback",
+      type: "counter",
+      labels: { ...diagnosticLabels, kind: "input" },
+    });
+    registry.inc("openclaw_diagnostic_model_tokens_total", event.usage?.output ?? 0, {
+      help: "Token totals reported by OpenClaw diagnostics or llm_output fallback",
+      type: "counter",
+      labels: { ...diagnosticLabels, kind: "output" },
+    });
+    if (cacheRead > 0) {
+      registry.inc("openclaw_diagnostic_model_tokens_total", cacheRead, {
+        help: "Token totals reported by OpenClaw diagnostics or llm_output fallback",
+        type: "counter",
+        labels: { ...diagnosticLabels, kind: "cache_read" },
+      });
+    }
+    if (cacheWrite > 0) {
+      registry.inc("openclaw_diagnostic_model_tokens_total", cacheWrite, {
+        help: "Token totals reported by OpenClaw diagnostics or llm_output fallback",
+        type: "counter",
+        labels: { ...diagnosticLabels, kind: "cache_write" },
+      });
+    }
+    registry.inc(
+      "openclaw_diagnostic_model_tokens_total",
+      event.usage?.total ??
+        (event.usage?.input ?? 0) +
+          (event.usage?.output ?? 0) +
+          (event.usage?.cacheRead ?? 0) +
+          (event.usage?.cacheWrite ?? 0),
+      {
+        help: "Token totals reported by OpenClaw diagnostics or llm_output fallback",
+        type: "counter",
+        labels: { ...diagnosticLabels, kind: "total" },
       },
     );
   });
@@ -286,6 +444,324 @@ function registerRuntimeEventListeners(api: OpenClawPluginApi): void {
       // 静默吞下 listener 异常
     }
   });
+}
+
+/**
+ * 订阅 OpenClaw 官方 diagnostic-events 总线，将诊断事件桥接为 Prometheus 指标。
+ *
+ * 这条链路来自上游 `openclaw/plugin-sdk` 根导出的 `onDiagnosticEvent`，
+ * 与 Hook/RPC 采集互补，尤其适合 session stuck、queue lane、webhook、tool loop 等信号。
+ */
+function registerDiagnosticEventBridge(): void {
+  stopDiagnosticSubscription?.();
+  stopDiagnosticSubscription = onDiagnosticEvent((event: DiagnosticEventPayload) => {
+    try {
+      recordDiagnosticEvent(event);
+    } catch {
+      // 诊断事件仅用于可观测性，不应影响主业务执行。
+    }
+  });
+}
+
+/**
+ * 将官方诊断事件转为低基数 Prometheus 指标。
+ *
+ * @param event - OpenClaw `onDiagnosticEvent` 推送的事件
+ */
+function recordDiagnosticEvent(event: DiagnosticEventPayload): void {
+  const { registry } = getRuntimeStore();
+  switch (event.type) {
+    case "model.usage": {
+      const labels = {
+        channel: stringOr(event.channel, "unknown"),
+        provider: stringOr(event.provider, "unknown"),
+        model: stringOr(event.model, "unknown"),
+      };
+      const usage = event.usage && typeof event.usage === "object" ? event.usage : undefined;
+      const usagePayload =
+        usage && typeof usage === "object"
+          ? (usage as {
+              input?: unknown;
+              output?: unknown;
+              cacheRead?: unknown;
+              cacheWrite?: unknown;
+              promptTokens?: unknown;
+              total?: unknown;
+            })
+          : undefined;
+      const context =
+        event.context && typeof event.context === "object"
+          ? (event.context as { used?: unknown; limit?: unknown })
+          : undefined;
+
+      registry.inc("openclaw_diagnostic_model_usage_total", 1, {
+        help: "Model usage events observed through OpenClaw diagnostic-events",
+        type: "counter",
+        labels,
+      });
+      registry.inc("openclaw_diagnostic_model_tokens_total", nonNegative(usagePayload?.input), {
+        help: "Token totals reported by model.usage diagnostic events",
+        type: "counter",
+        labels: { ...labels, kind: "input" },
+      });
+      registry.inc("openclaw_diagnostic_model_tokens_total", nonNegative(usagePayload?.output), {
+        help: "Token totals reported by model.usage diagnostic events",
+        type: "counter",
+        labels: { ...labels, kind: "output" },
+      });
+      registry.inc("openclaw_diagnostic_model_tokens_total", nonNegative(usagePayload?.cacheRead), {
+        help: "Token totals reported by model.usage diagnostic events",
+        type: "counter",
+        labels: { ...labels, kind: "cache_read" },
+      });
+      registry.inc("openclaw_diagnostic_model_tokens_total", nonNegative(usagePayload?.cacheWrite), {
+        help: "Token totals reported by model.usage diagnostic events",
+        type: "counter",
+        labels: { ...labels, kind: "cache_write" },
+      });
+      registry.inc("openclaw_diagnostic_model_tokens_total", nonNegative(usagePayload?.promptTokens), {
+        help: "Token totals reported by model.usage diagnostic events",
+        type: "counter",
+        labels: { ...labels, kind: "prompt" },
+      });
+      registry.inc("openclaw_diagnostic_model_tokens_total", nonNegative(usagePayload?.total), {
+        help: "Token totals reported by model.usage diagnostic events",
+        type: "counter",
+        labels: { ...labels, kind: "total" },
+      });
+      registry.inc("openclaw_diagnostic_model_cost_usd_total", nonNegative(event.costUsd), {
+        help: "Estimated cost reported by model.usage diagnostic events",
+        type: "counter",
+        labels,
+      });
+      registry.set("openclaw_diagnostic_model_context_tokens", nonNegative(context?.used), {
+        help: "Latest context tokens reported by model.usage diagnostic events",
+        labels: { ...labels, kind: "used" },
+      });
+      registry.set("openclaw_diagnostic_model_context_tokens", nonNegative(context?.limit), {
+        help: "Latest context tokens reported by model.usage diagnostic events",
+        labels: { ...labels, kind: "limit" },
+      });
+      if (typeof event.durationMs === "number" && event.durationMs >= 0) {
+        registry.observeHistogram("openclaw_diagnostic_model_duration_seconds", event.durationMs / 1000, {
+          help: "Model completion duration observed through model.usage diagnostic events",
+          labels,
+        });
+      }
+      return;
+    }
+    case "webhook.received": {
+      const labels = {
+        channel: stringOr(event.channel, "unknown"),
+        update_type: stringOr(event.updateType, "unknown"),
+      };
+      registry.inc("openclaw_diagnostic_webhook_received_total", 1, {
+        help: "Webhook receive events observed through OpenClaw diagnostic-events",
+        type: "counter",
+        labels,
+      });
+      return;
+    }
+    case "webhook.processed": {
+      const labels = {
+        channel: stringOr(event.channel, "unknown"),
+        update_type: stringOr(event.updateType, "unknown"),
+      };
+      registry.inc("openclaw_diagnostic_webhook_processed_total", 1, {
+        help: "Webhook processed events observed through OpenClaw diagnostic-events",
+        type: "counter",
+        labels,
+      });
+      if (typeof event.durationMs === "number" && event.durationMs >= 0) {
+        registry.observeHistogram("openclaw_diagnostic_webhook_duration_seconds", event.durationMs / 1000, {
+          help: "Webhook processing duration observed through OpenClaw diagnostic-events",
+          labels,
+        });
+      }
+      return;
+    }
+    case "webhook.error": {
+      registry.inc("openclaw_diagnostic_webhook_errors_total", 1, {
+        help: "Webhook processing errors observed through OpenClaw diagnostic-events",
+        type: "counter",
+        labels: {
+          channel: stringOr(event.channel, "unknown"),
+          update_type: stringOr(event.updateType, "unknown"),
+        },
+      });
+      return;
+    }
+    case "message.queued": {
+      const labels = {
+        channel: stringOr(event.channel, "unknown"),
+        source: stringOr(event.source, "unknown"),
+      };
+      registry.inc("openclaw_diagnostic_message_queued_total", 1, {
+        help: "Queued message events observed through OpenClaw diagnostic-events",
+        type: "counter",
+        labels,
+      });
+      if (typeof event.queueDepth === "number" && event.queueDepth >= 0) {
+        registry.set("openclaw_diagnostic_message_queue_depth", event.queueDepth, {
+          help: "Latest queue depth reported by message.queued diagnostic events",
+          labels: { scope: "message" },
+        });
+      }
+      return;
+    }
+    case "message.processed": {
+      const labels = {
+        channel: stringOr(event.channel, "unknown"),
+        outcome: stringOr(event.outcome, "unknown"),
+      };
+      registry.inc("openclaw_diagnostic_message_processed_total", 1, {
+        help: "Processed message events observed through OpenClaw diagnostic-events",
+        type: "counter",
+        labels,
+      });
+      if (typeof event.durationMs === "number" && event.durationMs >= 0) {
+        registry.observeHistogram("openclaw_diagnostic_message_duration_seconds", event.durationMs / 1000, {
+          help: "Message processing duration observed through OpenClaw diagnostic-events",
+          labels,
+        });
+      }
+      return;
+    }
+    case "session.state": {
+      const state = stringOr(event.state, "unknown");
+      registry.inc("openclaw_diagnostic_session_state_transitions_total", 1, {
+        help: "Session state transitions observed through OpenClaw diagnostic-events",
+        type: "counter",
+        labels: {
+          state,
+          prev_state: stringOr(event.prevState, "unknown"),
+        },
+      });
+      registry.setOneHotStatus("openclaw_diagnostic_session_state_current", state, ["idle", "processing", "waiting", "unknown"], {
+        help: "Latest session state seen through OpenClaw diagnostic-events",
+      });
+      if (typeof event.queueDepth === "number" && event.queueDepth >= 0) {
+        registry.set("openclaw_diagnostic_message_queue_depth", event.queueDepth, {
+          help: "Latest queue depth reported by session.state diagnostic events",
+          labels: { scope: "session" },
+        });
+      }
+      return;
+    }
+    case "session.stuck": {
+      const state = stringOr(event.state, "unknown");
+      const ageSeconds = typeof event.ageMs === "number" && event.ageMs >= 0 ? event.ageMs / 1000 : 0;
+      registry.inc("openclaw_diagnostic_session_stuck_total", 1, {
+        help: "Session stuck events observed through OpenClaw diagnostic-events",
+        type: "counter",
+        labels: { state },
+      });
+      registry.observeHistogram("openclaw_diagnostic_session_stuck_age_seconds", ageSeconds, {
+        help: "Age of stuck sessions observed through OpenClaw diagnostic-events",
+        labels: { state },
+      });
+      if (typeof event.queueDepth === "number" && event.queueDepth >= 0) {
+        registry.set("openclaw_diagnostic_message_queue_depth", event.queueDepth, {
+          help: "Latest queue depth reported by session.stuck diagnostic events",
+          labels: { scope: "stuck" },
+        });
+      }
+      return;
+    }
+    case "queue.lane.enqueue": {
+      const lane = stringOr(event.lane, "unknown");
+      registry.inc("openclaw_diagnostic_queue_lane_events_total", 1, {
+        help: "Queue lane enqueue/dequeue events observed through OpenClaw diagnostic-events",
+        type: "counter",
+        labels: { lane, event: "enqueue" },
+      });
+      if (typeof event.queueSize === "number" && event.queueSize >= 0) {
+        registry.set("openclaw_diagnostic_queue_lane_depth", event.queueSize, {
+          help: "Latest queue size by lane reported through OpenClaw diagnostic-events",
+          labels: { lane },
+        });
+      }
+      return;
+    }
+    case "queue.lane.dequeue": {
+      const lane = stringOr(event.lane, "unknown");
+      registry.inc("openclaw_diagnostic_queue_lane_events_total", 1, {
+        help: "Queue lane enqueue/dequeue events observed through OpenClaw diagnostic-events",
+        type: "counter",
+        labels: { lane, event: "dequeue" },
+      });
+      if (typeof event.queueSize === "number" && event.queueSize >= 0) {
+        registry.set("openclaw_diagnostic_queue_lane_depth", event.queueSize, {
+          help: "Latest queue size by lane reported through OpenClaw diagnostic-events",
+          labels: { lane },
+        });
+      }
+      if (typeof event.waitMs === "number" && event.waitMs >= 0) {
+        registry.observeHistogram("openclaw_diagnostic_queue_wait_seconds", event.waitMs / 1000, {
+          help: "Queue wait time observed through OpenClaw diagnostic-events",
+          labels: { lane },
+        });
+      }
+      return;
+    }
+    case "diagnostic.heartbeat": {
+      const heartbeatWebhooks =
+        event.webhooks && typeof event.webhooks === "object"
+          ? (event.webhooks as {
+              received?: unknown;
+              processed?: unknown;
+              errors?: unknown;
+            })
+          : undefined;
+      registry.set("openclaw_diagnostic_active_sessions", nonNegative(event.active), {
+        help: "Active sessions reported by OpenClaw diagnostic heartbeat",
+      });
+      registry.set("openclaw_diagnostic_waiting_sessions", nonNegative(event.waiting), {
+        help: "Waiting sessions reported by OpenClaw diagnostic heartbeat",
+      });
+      registry.set("openclaw_diagnostic_queued_messages", nonNegative(event.queued), {
+        help: "Queued messages reported by OpenClaw diagnostic heartbeat",
+      });
+      registry.set("openclaw_diagnostic_webhook_events", nonNegative(heartbeatWebhooks?.received), {
+        help: "Webhook received count snapshot reported by OpenClaw diagnostic heartbeat",
+        labels: { event: "received" },
+      });
+      registry.set("openclaw_diagnostic_webhook_events", nonNegative(heartbeatWebhooks?.processed), {
+        help: "Webhook processed count snapshot reported by OpenClaw diagnostic heartbeat",
+        labels: { event: "processed" },
+      });
+      registry.set("openclaw_diagnostic_webhook_events", nonNegative(heartbeatWebhooks?.errors), {
+        help: "Webhook error count snapshot reported by OpenClaw diagnostic heartbeat",
+        labels: { event: "errors" },
+      });
+      return;
+    }
+    case "tool.loop": {
+      registry.inc("openclaw_diagnostic_tool_loop_total", 1, {
+        help: "Tool loop warnings/blocks observed through OpenClaw diagnostic-events",
+        type: "counter",
+        labels: {
+          tool: stringOr(event.toolName, "unknown"),
+          detector: stringOr(event.detector, "unknown"),
+          action: stringOr(event.action, "unknown"),
+          level: stringOr(event.level, "unknown"),
+          paired_tool: stringOr(event.pairedToolName, "none"),
+        },
+      });
+      if (typeof event.count === "number" && event.count >= 0) {
+        registry.set("openclaw_diagnostic_tool_loop_count", event.count, {
+          help: "Latest loop repetition count observed through OpenClaw diagnostic-events",
+          labels: {
+            tool: stringOr(event.toolName, "unknown"),
+            detector: stringOr(event.detector, "unknown"),
+          },
+        });
+      }
+      return;
+    }
+    default:
+      return;
+  }
 }
 
 /**
@@ -537,11 +1013,11 @@ export function refreshHousekeepingMetrics(): void {
   const { registry, cfg } = store;
   registry.set("openclaw_up", 1, {
     help: "Whether the OpenClaw Prometheus plugin is loaded",
-    labels: { instance: cfg.instance || "default" },
+    labels: { deployment: cfg.instance || "default" },
   });
   registry.set("openclaw_ready", 1, {
     help: "Whether the OpenClaw Prometheus plugin runtime is initialized",
-    labels: { instance: cfg.instance || "default" },
+    labels: { deployment: cfg.instance || "default" },
   });
   registry.set("openclaw_plugin_uptime_seconds", (Date.now() - store.startedAt) / 1000, {
     help: "Plugin uptime in seconds",
@@ -621,6 +1097,10 @@ function optionalString(value: unknown): string | undefined {
 
 function stringOr(value: unknown, fallback: string): string {
   return optionalString(value) ?? fallback;
+}
+
+function nonNegative(value: unknown): number {
+  return typeof value === "number" && value >= 0 ? value : 0;
 }
 
 // ─────────── HTTP 延迟环形缓冲区（用于计算 P95/P99） ───────────

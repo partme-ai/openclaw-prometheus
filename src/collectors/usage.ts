@@ -5,6 +5,8 @@ import { sanitizeLabel } from "../utils.js";
 const PREFIX = "openclaw_usage";
 
 const DEFAULT_USAGE_WINDOW_DAYS = 30;
+const DEFAULT_USAGE_COST_CACHE_MS = 15_000;
+const DEFAULT_SESSIONS_USAGE_CACHE_MS = 120_000;
 
 type CostTotalsShape = {
   input?: number;
@@ -89,11 +91,24 @@ type SessionsUsageResult = {
   };
 };
 
+type CachedRpcValue<T> = {
+  value: T;
+  collectedAt: number;
+};
+
 /**
  * Usage 采集器
  */
 export class UsageCollector implements MetricCollector {
   name = "usage";
+
+  private costCache: CachedRpcValue<UsageCostResult> | null = null;
+
+  private sessionsUsageCache: CachedRpcValue<SessionsUsageResult> | null = null;
+
+  private costInflight: Promise<UsageCostResult> | null = null;
+
+  private sessionsUsageInflight: Promise<SessionsUsageResult> | null = null;
 
   definitions: MetricDefinition[] = [
     def(`${PREFIX}_requests_total`, "Request count when exposed by usage.cost payload"),
@@ -156,8 +171,8 @@ export class UsageCollector implements MetricCollector {
   async collect(): Promise<MetricSample[]> {
     const usageWindow = buildUsageWindowParams();
     const [costResult, sessionsUsageResult] = await Promise.all([
-      rpcCall<UsageCostResult>("usage.cost", usageWindow),
-      rpcCall<SessionsUsageResult>("sessions.usage", {
+      this.getUsageCost(usageWindow),
+      this.getSessionsUsage({
         ...usageWindow,
         limit: 1000,
         includeContextWeight: true,
@@ -187,6 +202,85 @@ export class UsageCollector implements MetricCollector {
     appendDailyLatencySamples(samples, sessionsUsageResult?.aggregates?.dailyLatency);
     appendModelDailySamples(samples, sessionsUsageResult?.aggregates?.modelDaily);
     return samples;
+  }
+
+  /**
+   * `usage.cost` 数据量较小，保留短 TTL，兼顾实时性与 scrape 性能。
+   */
+  private async getUsageCost(params: Record<string, unknown>): Promise<UsageCostResult> {
+    return this.getCachedUsageValue({
+      cache: this.costCache,
+      inflight: this.costInflight,
+      intervalMs: DEFAULT_USAGE_COST_CACHE_MS,
+      request: async () => (await rpcCall<UsageCostResult>("usage.cost", params)) ?? {},
+      setCache: (cache) => {
+        this.costCache = cache;
+      },
+      setInflight: (inflight) => {
+        this.costInflight = inflight;
+      },
+    });
+  }
+
+  /**
+   * `sessions.usage` 聚合代价高，采用长 TTL + 并发去重，避免拖慢 `/metrics`。
+   */
+  private async getSessionsUsage(params: Record<string, unknown>): Promise<SessionsUsageResult> {
+    return this.getCachedUsageValue({
+      cache: this.sessionsUsageCache,
+      inflight: this.sessionsUsageInflight,
+      intervalMs: DEFAULT_SESSIONS_USAGE_CACHE_MS,
+      request: async () => (await rpcCall<SessionsUsageResult>("sessions.usage", params)) ?? {},
+      setCache: (cache) => {
+        this.sessionsUsageCache = cache;
+      },
+      setInflight: (inflight) => {
+        this.sessionsUsageInflight = inflight;
+      },
+    });
+  }
+
+  /**
+   * 通用缓存入口：
+   * 1. TTL 内直接返回；
+   * 2. TTL 过期但已有并发刷新时复用同一 Promise；
+   * 3. 刷新失败时回退到最近一次成功值，避免 scrape 直接超时/报错。
+   */
+  private async getCachedUsageValue<T>(options: {
+    cache: CachedRpcValue<T> | null;
+    inflight: Promise<T> | null;
+    intervalMs: number;
+    request: () => Promise<T>;
+    setCache: (cache: CachedRpcValue<T> | null) => void;
+    setInflight: (inflight: Promise<T> | null) => void;
+  }): Promise<T> {
+    const now = Date.now();
+    if (options.cache && now - options.cache.collectedAt < options.intervalMs) {
+      return options.cache.value;
+    }
+    if (options.inflight) {
+      return options.inflight;
+    }
+
+    const previous = options.cache;
+    const inflight = options
+      .request()
+      .then((value) => {
+        options.setCache({ value, collectedAt: Date.now() });
+        return value;
+      })
+      .catch((error) => {
+        if (previous) {
+          return previous.value;
+        }
+        throw error;
+      })
+      .finally(() => {
+        options.setInflight(null);
+      });
+
+    options.setInflight(inflight);
+    return inflight;
   }
 }
 

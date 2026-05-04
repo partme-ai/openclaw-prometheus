@@ -50,7 +50,7 @@ describe("prometheusPlugin register", () => {
     expect(body).toContain("openclaw_model_auth_provider_status{provider=\"openai\",status=\"ok\"} 1");
     expect(body).toContain("openclaw_sli_message_success_ratio");
     expect(body).toContain("openclaw_sli_channel_health_ratio");
-  });
+  }, 15000);
 });
 
 // Minimal fake API

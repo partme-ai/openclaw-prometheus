@@ -89,6 +89,46 @@ rate(openclaw_sli_agent_error_ratio[1h]) / (1 - 0.999)
 - **Stat**：每个 SLI gauge → 绿色（>0.99）/ 黄色 / 红色（<0.95）
 - **Time series**：`rate(openclaw_sli_agent_error_ratio[5m])` → 错误率趋势
 
+### 1.5 官方诊断事件桥接（Diagnostics）
+
+> 来源：OpenClaw 官方 `onDiagnosticEvent` 总线；用于补齐 Hook/RPC 之外的 webhook、queue、session stuck、tool loop 等信号。
+
+| 指标 | 类型 | 标签 | 说明 |
+|------|------|------|------|
+| `openclaw_diagnostic_model_usage_total` | counter | `channel`, `provider`, `model` | `model.usage` 事件次数 |
+| `openclaw_diagnostic_model_tokens_total` | counter | `channel`, `provider`, `model`, `kind` | `model.usage` 上报的 token 累计值，`kind ∈ {input, output, cache_read, cache_write, prompt, total}` |
+| `openclaw_diagnostic_model_cost_usd_total` | counter | `channel`, `provider`, `model` | `model.usage` 估算费用（USD）累计 |
+| `openclaw_diagnostic_model_context_tokens` | gauge | `channel`, `provider`, `model`, `kind` | `model.usage` 最近一次上下文 token，`kind ∈ {used, limit}` |
+| `openclaw_diagnostic_model_duration_seconds` | histogram | `channel`, `provider`, `model` | `model.usage` 完成耗时 |
+| `openclaw_diagnostic_webhook_received_total` | counter | `channel`, `update_type` | Webhook 收到次数 |
+| `openclaw_diagnostic_webhook_processed_total` | counter | `channel`, `update_type` | Webhook 处理完成次数 |
+| `openclaw_diagnostic_webhook_errors_total` | counter | `channel`, `update_type` | Webhook 处理失败次数 |
+| `openclaw_diagnostic_webhook_duration_seconds` | histogram | `channel`, `update_type` | Webhook 处理时长 |
+| `openclaw_diagnostic_message_queued_total` | counter | `channel`, `source` | 消息入队次数 |
+| `openclaw_diagnostic_message_processed_total` | counter | `channel`, `outcome` | 消息处理结果次数 |
+| `openclaw_diagnostic_message_duration_seconds` | histogram | `channel`, `outcome` | 消息处理时长 |
+| `openclaw_diagnostic_message_queue_depth` | gauge | `scope` | 最近一次诊断事件报告的队列深度 |
+| `openclaw_diagnostic_queue_lane_events_total` | counter | `lane`, `event` | 队列 lane 的 enqueue/dequeue 次数 |
+| `openclaw_diagnostic_queue_lane_depth` | gauge | `lane` | 各 lane 最近队列长度 |
+| `openclaw_diagnostic_queue_wait_seconds` | histogram | `lane` | 队列等待时长 |
+| `openclaw_diagnostic_session_state_transitions_total` | counter | `state`, `prev_state` | 会话状态迁移次数 |
+| `openclaw_diagnostic_session_state_current` | gauge | `status` | 最近观测到的会话状态 one-hot |
+| `openclaw_diagnostic_session_stuck_total` | counter | `state` | session stuck 次数 |
+| `openclaw_diagnostic_session_stuck_age_seconds` | histogram | `state` | stuck 会话年龄 |
+| `openclaw_diagnostic_active_sessions` | gauge | - | heartbeat 报告的 active 会话数 |
+| `openclaw_diagnostic_waiting_sessions` | gauge | - | heartbeat 报告的 waiting 会话数 |
+| `openclaw_diagnostic_queued_messages` | gauge | - | heartbeat 报告的 queued 消息数 |
+| `openclaw_diagnostic_webhook_events` | gauge | `event` | heartbeat 报告的 webhook received/processed/errors 快照 |
+| `openclaw_diagnostic_tool_loop_total` | counter | `tool`, `detector`, `action`, `level`, `paired_tool` | tool loop 预警/阻断次数 |
+| `openclaw_diagnostic_tool_loop_count` | gauge | `tool`, `detector` | 最近一次 tool loop 的重复次数 |
+
+**Grafana 面板建议**：
+- **Time series**：`sum by (provider, model) (rate(openclaw_diagnostic_model_usage_total[5m]))`、`sum by (provider, model, kind) (increase(openclaw_diagnostic_model_tokens_total[1h]))`
+- **Stat**：`sum(openclaw_diagnostic_model_cost_usd_total)`、`max by (provider, model) (openclaw_diagnostic_model_context_tokens{kind="used"})`
+- **Stat**：`openclaw_diagnostic_active_sessions`、`openclaw_diagnostic_waiting_sessions`、`openclaw_diagnostic_queued_messages`
+- **Time series**：`rate(openclaw_diagnostic_webhook_received_total[5m])`、`histogram_quantile(0.95, sum(rate(openclaw_diagnostic_queue_wait_seconds_bucket[5m])) by (le, lane))`
+- **Bar chart / Table**：`topk(10, increase(openclaw_diagnostic_tool_loop_total[1h]))`、`openclaw_diagnostic_queue_lane_depth`
+
 ---
 
 ## 2. 智能体域 (`openclaw_agent_*`)
